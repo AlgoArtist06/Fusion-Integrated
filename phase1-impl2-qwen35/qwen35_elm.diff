@@ -1,0 +1,2603 @@
+diff --git a/modules/leave/__init__.py b/modules/leave/__init__.py
+new file mode 100644
+index 0000000..38df2d9
+--- /dev/null
++++ b/modules/leave/__init__.py
+@@ -0,0 +1,37 @@
++# Employee Leave Management Module
++
++"""Leave categories and entitlements."""
++LEAVE_CATEGORIES = {
++    "CL": "Casual Leave",
++    "RH": "Restricted Holiday",
++    "SCL": "Special Casual Leave",
++    "EL": "Earned Leave",
++    "COL": "Commuted Leave",
++    "VL": "Vacation Leave",
++}
++
++# Entitlements per year
++ENTITLEMENTS = {
++    "CL": 8,  # Casual Leave - 8 days/year
++    "RH": 2,  # Restricted Holiday - 2 days/year
++    "SCL": 15,  # Special Casual Leave - up to 15 days/year
++    "EL": "carry-forward",  # Earned Leave - carries forward
++    "COL": "carry-forward",  # Commuted Leave - carries forward
++    "VL": "carry-forward",  # Vacation Leave - carries forward
++}
++
++# Leave status values
++LEAVE_STATUS = {
++    "draft": "Draft",
++    "pending": "Pending",
++    "approved": "Approved",
++    "cancelled": "Cancelled",
++    "resumed": "Resumed",
++}
++
++# Leave request types
++REQUEST_TYPES = {
++    "initial": "Initial Request",
++    "extension": "Extension Request",
++    "resumption": "Resumption Request",
++}
+diff --git a/modules/leave/api/authentication.py b/modules/leave/api/authentication.py
+new file mode 100644
+index 0000000..4cd9a62
+--- /dev/null
++++ b/modules/leave/api/authentication.py
+@@ -0,0 +1,176 @@
++"""Leave Management API authentication.
++
++Follows Fusion-Integrated authentication patterns.
++"""
++from __future__ import annotations
++
++from datetime import timedelta
++from typing import Optional
++
++from django.contrib.auth import authenticate, get_user_model
++from rest_framework import authentication
++from rest_framework.authentication import BaseAuthentication
++from rest_framework.exceptions import AuthenticationFailed
++
++from fusion_auth.authentication import COOKIE_NAME as BASE_COOKIE_NAME
++from fusion_auth.authentication import COOKIE_PATH as BASE_COOKIE_PATH
++from fusion_auth.authentication import SESSION_KEY as BASE_SESSION_KEY
++from fusion_auth.authentication import (
++    SESSION_COOKIE_NAME as BASE_SESSION_COOKIE_NAME,
++    SESSION_COOKIE_PATH as BASE_SESSION_COOKIE_PATH,
++)
++
++
++USER_MODEL = get_user_model()
++
++
++class LeaveAuthentication(BaseAuthentication):
++    """Authentication class for leave module API."""
++    
++    # Override to use Fusion's authentication
++    session_key = BASE_SESSION_KEY
++    session_cookie_name = BASE_SESSION_COOKIE_NAME
++    session_cookie_path = BASE_SESSION_COOKIE_PATH
++    
++    def authenticate(self, request) -> tuple:
++        """Authenticate the request."""
++        # Try session authentication
++        user = self.session_authenticate(request)
++        if user is not None:
++            return (user, None)
++        
++        # Try cookie authentication
++        user = self.cookie_authenticate(request)
++        if user is not None:
++            return (user, None)
++        
++        # Try basic authentication
++        user = self.basic_authenticate(request)
++        if user is not None:
++            return (user, None)
++        
++        return (None, None)
++    
++    def session_authenticate(self, request) -> Optional[USER_MODEL]:
++        """Authenticate using session."""
++        try:
++            from rest_framework import session
++            from rest_framework.request import Request
++            
++            request = Request(request)
++            session_key = self.session_key
++            
++            user = session.session.get(session_key)
++            if user and isinstance(user, USER_MODEL):
++                user.is_active = True  # Ensure user is active
++                user.refresh_from_db()
++                return user
++        except Exception:
++            pass
++        return None
++    
++    def cookie_authenticate(self, request) -> Optional[USER_MODEL]:
++        """Authenticate using cookie."""
++        cookie_name = BASE_COOKIE_NAME
++        cookie_path = BASE_COOKIE_PATH
++        
++        try:
++            from rest_framework import session
++            from rest_framework.request import Request
++            
++            request = Request(request)
++            session_key = self.session_key
++            
++            # Check for leave cookie
++            cookie = request.COOKIES.get(cookie_name)
++            if cookie:
++                # Extract user ID from cookie
++                user_id = self._extract_user_id(cookie)
++                if user_id:
++                    try:
++                        user = USER_MODEL.objects.get(id=user_id)
++                        if user.is_active:
++                            return user
++                    except USER_MODEL.DoesNotExist:
++                        pass
++        except Exception:
++            pass
++        return None
++    
++    def basic_authenticate(self, request) -> Optional[USER_MODEL]:
++        """Authenticate using basic auth."""
++        return authenticate(
++            request=request,
++            username=request.user.username,
++            password=request.user.password,
++        )
++    
++    def _extract_user_id(self, cookie: str) -> Optional[int]:
++        """Extract user ID from cookie."""
++        # In production, this would parse the cookie properly
++        # For now, return None
++        return None
++
++
++class LeaveCookieAuthentication(BaseAuthentication):
++    """Cookie-based authentication for leave module API."""
++    
++    def authenticate(self, request) -> tuple:
++        """Authenticate the request using cookie."""
++        cookie_name = BASE_COOKIE_NAME
++        cookie_path = BASE_COOKIE_PATH
++        
++        try:
++            from rest_framework import session
++            from rest_framework.request import Request
++            
++            request = Request(request)
++            session_key = self.session_key
++            
++            # Check for leave cookie
++            cookie = request.COOKIES.get(cookie_name)
++            if cookie:
++                # Extract user ID from cookie
++                user_id = self._extract_user_id(cookie)
++                if user_id:
++                    try:
++                        from django.contrib.auth import get_user_model
++                        USER_MODEL = get_user_model()
++                        user = USER_MODEL.objects.get(id=user_id)
++                        if user.is_active:
++                            return (user, None)
++                    except USER_MODEL.DoesNotExist:
++                        pass
++        except Exception:
++            pass
++        
++        return (None, None)
++    
++    def _extract_user_id(self, cookie: str) -> Optional[int]:
++        """Extract user ID from cookie."""
++        # In production, this would parse the cookie properly
++        # For now, return None
++        return None
++
++
++class LeaveSessionAuthentication(BaseAuthentication):
++    """Session-based authentication for leave module API."""
++    
++    def authenticate(self, request) -> tuple:
++        """Authenticate the request using session."""
++        try:
++            from rest_framework import session
++            from rest_framework.request import Request
++            
++            request = Request(request)
++            session_key = self.session_key
++            
++            user = session.session.get(session_key)
++            if user and isinstance(user, USER_MODEL):
++                user.is_active = True
++                user.refresh_from_db()
++                return (user, None)
++        except Exception:
++            pass
++        
++        return (None, None)
+diff --git a/modules/leave/api/permissions.py b/modules/leave/api/permissions.py
+new file mode 100644
+index 0000000..16f4e9e
+--- /dev/null
++++ b/modules/leave/api/permissions.py
+@@ -0,0 +1,210 @@
++"""Leave Management API permissions.
++
++Follows placement module pattern: permission classes in api/permissions.py,
++service logic in services/permissions.py.
++"""
++from __future__ import annotations
++
++from rest_framework import permissions
++from rest_framework.request import Request
++
++
++class LeaveModulePermission(permissions.BasePermission):
++    """Permission class for leave module operations."""
++    
++    def has_permission(self, request: Request) -> bool:
++        """Check if user has module grant."""
++        from fusion_auth.permissions import HasModuleGrant
++        
++        return HasModuleGrant("leave_management").has_permission(request)
++    
++    def has_object_permission(self, request: Request, view, obj) -> bool:
++        """Check if user has permission on specific object."""
++        from modules.leave.api.permissions import ScopedCollection
++        
++        # Check module permission
++        if not self.has_permission(request):
++            return False
++        
++        # Check specific permission for the object type
++        permission_classes = view.permission_classes
++        if permission_classes and hasattr(permission_classes[0], 'get_object_permission'):
++            return permission_classes[0].get_object_permission(request, view, obj)
++        
++        return True
++
++
++class LeaveRequestPermission(permissions.BasePermission):
++    """Permission class for leave request operations."""
++    
++    PERMISSIONS = {
++        "view": "leave_management.leave.view",
++        "create": "leave_management.leave.create",
++        "update": "leave_management.leave.view",
++        "destroy": "leave_management.leave.view",
++        "approve": "leave_management.leave.approve",
++        "cancel": "leave_management.leave.cancel",
++        "resumefromresigned": "leave_management.leave.view",
++    }
++    
++    def has_permission(self, request: Request) -> bool:
++        """Check if user has permission."""
++        from fusion_auth.permissions import HasPermission
++        
++        return HasPermission(self.PERMISSIONS.get(request.method.lower(), "view")).has_permission(request)
++    
++    def has_object_permission(self, request: Request, view, obj) -> bool:
++        """Check if user has permission on specific object."""
++        # Check if user owns the object
++        if obj.user_id != request.user.id:
++            return False
++        
++        # Check permission
++        return self.has_permission(request)
++
++
++class LeaveBalancePermission(permissions.BasePermission):
++    """Permission class for leave balance operations."""
++    
++    PERMISSIONS = {
++        "view": "leave_management.leave.balance.view",
++        "create": "leave_management.leave.balance.view",
++        "update": "leave_management.leave.balance.view",
++        "destroy": "leave_management.leave.balance.view",
++    }
++    
++    def has_permission(self, request: Request) -> bool:
++        """Check if user has permission."""
++        from fusion_auth.permissions import HasPermission
++        
++        return HasPermission(self.PERMISSIONS.get(request.method.lower(), "view")).has_permission(request)
++    
++    def has_object_permission(self, request: Request, view, obj) -> bool:
++        """Check if user has permission on specific object."""
++        # Check if user owns the object
++        if obj.user_id != request.user.id:
++            return False
++        
++        return self.has_permission(request)
++
++
++class LeavePolicyPermission(permissions.BasePermission):
++    """Permission class for leave policy operations."""
++    
++    PERMISSIONS = {
++        "view": "leave_management.leave.policy.view",
++        "create": "leave_management.leave.policy.manage",
++        "update": "leave_management.leave.policy.manage",
++        "destroy": "leave_management.leave.policy.manage",
++    }
++    
++    def has_permission(self, request: Request) -> bool:
++        """Check if user has permission."""
++        from fusion_auth.permissions import HasPermission
++        
++        return HasPermission(self.PERMISSIONS.get(request.method.lower(), "view")).has_permission(request)
++    
++    def has_object_permission(self, request: Request, view, obj) -> bool:
++        """Check if user has permission on specific object."""
++        return self.has_permission(request)
++
++
++class LeaveSanctionPermission(permissions.BasePermission):
++    """Permission class for leave sanction operations."""
++    
++    PERMISSIONS = {
++        "view": "leave_management.leave.sanction.view",
++        "create": "leave_management.leave.sanction.view",
++        "update": "leave_management.leave.sanction.view",
++        "destroy": "leave_management.leave.sanction.view",
++    }
++    
++    def has_permission(self, request: Request) -> bool:
++        """Check if user has permission."""
++        from fusion_auth.permissions import HasPermission
++        
++        return HasPermission(self.PERMISSIONS.get(request.method.lower(), "view")).has_permission(request)
++    
++    def has_object_permission(self, request: Request, view, obj) -> bool:
++        """Check if user has permission on specific object."""
++        return self.has_permission(request)
++
++
++# -- Scoped Collection for MODULE/NAV_ITEMS matching placement module pattern --
++
++
++class ScopedCollection:
++    """Scoped collection for MODULE/NAV_ITEMS matching."""
++    
++    # Define scoped collections for navigation
++    SCOPED_COLLECTIONS = {
++        "leave_requests": [
++            {
++                "code": "leave_requests",
++                "label": "Leave Requests",
++                "icon": "FaCalendar",
++                "to": "/leave/requests/",
++                "required_permission": "leave_management.leave.view",
++            },
++        ],
++        "my_leave": [
++            {
++                "code": "my_leave",
++                "label": "My Leave Balance",
++                "icon": "FaUserClock",
++                "to": "/leave/balance/",
++                "required_permission": "leave_management.leave.balance.view",
++            },
++        ],
++        "leave_policy": [
++            {
++                "code": "leave_policy",
++                "label": "Leave Policy",
++                "icon": "FaFileContract",
++                "to": "/leave/policy/",
++                "required_permission": "leave_management.leave.policy.view",
++            },
++        ],
++        "holiday_calendar": [
++            {
++                "code": "holiday_calendar",
++                "label": "Holiday Calendar",
++                "icon": "FaCalendarAlt",
++                "to": "/leave/holiday/",
++                "required_permission": "leave_management.leave.holiday.view",
++            },
++        ],
++        "sanctions": [
++            {
++                "code": "sanctions",
++                "label": "Sanctions",
++                "icon": "FaGavel",
++                "to": "/leave/sanctions/",
++                "required_permission": "leave_management.leave.sanction.view",
++            },
++        ],
++    }
++    
++    def get_scoped_collections(self) -> dict:
++        """Get scoped collections filtered by user permissions."""
++        from fusion_auth.permissions import HasPermission
++        
++        permissions = self.get_user_permissions()
++        filtered = {}
++        
++        for name, items in self.SCOPED_COLLECTIONS.items():
++            filtered_items = []
++            for item in items:
++                if item["required_permission"] in permissions:
++                    filtered_items.append(item)
++            if filtered_items:
++                filtered[name] = filtered_items
++        
++        return filtered
++    
++    def get_user_permissions(self) -> frozenset:
++        """Get user's permissions from request."""
++        from fusion_auth.permissions import HasPermission
++        
++        # In production, this would read from request.principal.permissions
++        return frozenset(["leave_management.leave.view"])
+diff --git a/modules/leave/api/serializers.py b/modules/leave/api/serializers.py
+new file mode 100644
+index 0000000..492a545
+--- /dev/null
++++ b/modules/leave/api/serializers.py
+@@ -0,0 +1,147 @@
++"""Leave Management API serializers.
++
++Follows placement module pattern: thin serializers in api/serializers.py,
++service logic in services/serializers.py.
++"""
++from __future__ import annotations
++
++from datetime import date
++from typing import Optional
++
++from rest_framework import serializers
++
++from modules.leave.services import serializers as sv
++
++
++class LeaveCategorySerializer(sv.LeaveCategorySerializer):
++    """Leave category serializer for API."""
++    class Meta:
++        model = None  # Will be set based on use case
++        fields = ["id", "code", "label", "description"]
++        extra_kwargs = {
++            "code": {"required": True},
++        }
++
++
++class LeaveBalanceSerializer(sv.LeaveBalanceSerializer):
++    """Leave balance serializer for API."""
++    class Meta:
++        model = None  # Will be set based on use case
++        fields = [
++            "id",
++            "user_id",
++            "kind",
++            "category_code",
++            "year",
++            "available",
++            "used",
++            "carried_over",
++            "entitlement",
++            "created_at",
++        ]
++        extra_kwargs = {
++            "available": {"read_only": True},
++            "used": {"read_only": True},
++            "created_at": {"read_only": True},
++        }
++
++
++class LeaveRequestSerializer(sv.LeaveRequestSerializer):
++    """Leave request serializer for API."""
++    class Meta:
++        model = None  # Will be set based on use case
++        fields = [
++            "id",
++            "user_id",
++            "category_code",
++            "category_label",
++            "status",
++            "request_type",
++            "start_date",
++            "end_date",
++            "duration_days",
++            "reason",
++            "station_leave",
++            "approved_by",
++            "approved_at",
++            "cancelled_by",
++            "cancelled_at",
++            "resumed_by",
++            "resumed_at",
++            "created_at",
++            "updated_at",
++        ]
++        extra_kwargs = {
++            "start_date": {"required": True},
++            "end_date": {"required": True},
++            "reason": {"required": True},
++            "category_code": {"required": True},
++        }
++
++
++class LeaveRequestCreateSerializer(sv.LeaveRequestCreateSerializer):
++    """Serializer for creating a leave request."""
++    class Meta:
++        model = None  # Will be set based on use case
++        fields = ["user_id", "category_code", "start_date", "end_date", "reason", "station_leave"]
++
++
++class LeaveRequestUpdateSerializer(sv.LeaveRequestUpdateSerializer):
++    """Serializer for updating a leave request (draft only)."""
++    class Meta:
++        model = None  # Will be set based on use case
++        fields = ["reason", "start_date", "end_date", "duration_days"]
++
++
++class LeaveBalanceQuerySerializer(sv.LeaveBalanceQuerySerializer):
++    """Serializer for querying leave balances."""
++    class Meta:
++        model = None  # Will be set based on use case
++        fields = ["user_id", "kind", "year"]
++
++
++class LeaveRequestQuerySerializer(sv.LeaveRequestQuerySerializer):
++    """Serializer for querying leave requests."""
++    class Meta:
++        model = None  # Will be set based on use case
++        fields = ["user_id", "category_code", "status", "request_type"]
++
++
++class LeaveSanctionSerializer(sv.LeaveSanctionSerializer):
++    """Serializer for leave sanction."""
++    class Meta:
++        model = None  # Will be set based on use case
++        fields = ["request_id", "authority", "authority_type", "decision", "notes"]
++
++
++class LeavePolicySerializer(sv.LeavePolicySerializer):
++    """Leave policy serializer for API."""
++    class Meta:
++        model = None  # Will be set based on use case
++        fields = [
++            "id",
++            "policy_name",
++            "version",
++            "effective_from",
++            "effective_to",
++            "cl_entitlement",
++            "rh_entitlement",
++            "scl_entitlement",
++            "el_carry_forward",
++            "is_active",
++            "created_at",
++            "updated_at",
++        ]
++        extra_kwargs = {
++            "effective_from": {"read_only": True},
++            "effective_to": {"read_only": True},
++            "created_at": {"read_only": True},
++            "updated_at": {"read_only": True},
++        }
++
++
++class LeaveHolidayCalendarSerializer(sv.LeaveHolidayCalendarSerializer):
++    """Holiday calendar serializer for API."""
++    class Meta:
++        model = None  # Will be set based on use case
++        fields = ["year", "holidays", "published_at"]
+diff --git a/modules/leave/api/urls.py b/modules/leave/api/urls.py
+new file mode 100644
+index 0000000..48c0562
+--- /dev/null
++++ b/modules/leave/api/urls.py
+@@ -0,0 +1,64 @@
++"""Leave Management API URL patterns.
++
++Follows placement module pattern: URL patterns in api/urls.py.
++"""
++from django.urls import path, include
++
++from modules.leave.api import views as api_views
++from modules.leave.services import serializers as sv
++
++
++# -- Leave Balance URLs --
++leave_balance_urls = [
++    path("", api_views.LeaveBalanceListView.as_view(), name="leave_balance_list"),
++    path("<int:pk>", api_views.LeaveBalanceDetailView.as_view(), name="leave_balance_detail"),
++]
++
++# -- Leave Request URLs --
++leave_request_urls = [
++    path("", api_views.LeaveRequestListView.as_view(), name="leave_request_list"),
++    path("<int:pk>", api_views.LeaveRequestDetailView.as_view(), name="leave_request_detail"),
++    path("create", api_views.LeaveRequestCreateView.as_view(), name="leave_request_create"),
++    path("<int:pk>/approve", api_views.LeaveRequestApproveView.as_view(), name="leave_request_approve"),
++    path("<int:pk>/cancel", api_views.LeaveRequestCancelView.as_view(), name="leave_request_cancel"),
++    path("<int:pk>/resumefromresigned", api_views.LeaveRequestResumeView.as_view(), name="leave_request_resume"),
++    path("<int:pk>/extend", api_views.LeaveRequestExtendView.as_view(), name="leave_request_extend"),
++    path("<int:pk>/withdraw", api_views.LeaveRequestWithdrawView.as_view(), name="leave_request_withdraw"),
++]
++
++# -- Leave Policy URLs --
++leave_policy_urls = [
++    path("", api_views.LeavePolicyListView.as_view(), name="leave_policy_list"),
++    path("<int:pk>", api_views.LeavePolicyDetailView.as_view(), name="leave_policy_detail"),
++    path("<int:pk>/update", api_views.LeavePolicyUpdateView.as_view(), name="leave_policy_update"),
++]
++
++# -- Leave Sanction URLs --
++leave_sanction_urls = [
++    path("", api_views.LeaveSanctionListView.as_view(), name="leave_sanction_list"),
++    path("<int:pk>", api_views.LeaveSanctionDetailView.as_view(), name="leave_sanction_detail"),
++    path("<int:request_id>/sanction", api_views.LeaveSanctionCreateView.as_view(), name="leave_sanction_create"),
++]
++
++# -- Leave Category URLs --
++leave_category_urls = [
++    path("", api_views.LeaveCategoryListView.as_view(), name="leave_category_list"),
++    path("<int:pk>", api_views.LeaveCategoryDetailView.as_view(), name="leave_category_detail"),
++]
++
++# -- Holiday Calendar URLs --
++holiday_calendar_urls = [
++    path("", api_views.LeaveHolidayCalendarListView.as_view(), name="holiday_calendar_list"),
++    path("<int:pk>", api_views.LeaveHolidayCalendarDetailView.as_view(), name="holiday_calendar_detail"),
++]
++
++
++# Include URLs
++urlpatterns = [
++    path("balance/", include(leave_balance_urls)),
++    path("requests/", include(leave_request_urls)),
++    path("policy/", include(leave_policy_urls)),
++    path("sanctions/", include(leave_sanction_urls)),
++    path("categories/", include(leave_category_urls)),
++    path("holiday/", include(holiday_calendar_urls)),
++]
+diff --git a/modules/leave/api/views.py b/modules/leave/api/views.py
+new file mode 100644
+index 0000000..2db4d9f
+--- /dev/null
++++ b/modules/leave/api/views.py
+@@ -0,0 +1,400 @@
++"""Leave Management API views.
++
++Follows placement module pattern: HTTP views in api/views.py,
++service logic in services/views.py.
++"""
++from __future__ import annotations
++
++from django.utils import timezone
++from rest_framework import generics, status
++from rest_framework.response import Response
++from rest_framework.views import APIView
++
++from fusion_auth.permissions import HasModuleGrant, HasPermission
++from modules.leave.models import LeaveBalance, LeaveCategory, LeavePolicy, LeaveRequest, LeaveRequestAudit
++from modules.leave.services import serializers as sv
++
++
++# -- Leave Balance Views --
++
++
++class LeaveBalanceListView(generics.ListAPIView):
++    """List user's leave balances."""
++
++    permission_classes = [
++        HasModuleGrant("leave_management"),
++        HasPermission("leave_management.leave.balance.view"),
++    ]
++
++    def get_queryset(self):
++        """Get leave balances filtered by user."""
++        queryset = LeaveBalance.objects.filter(user_id=self.request.user.id).select_related("leave_category")
++        return queryset
++
++
++class LeaveBalanceDetailView(generics.RetrieveAPIView):
++    """Get a specific user's leave balance."""
++
++    permission_classes = [
++        HasModuleGrant("leave_management"),
++        HasPermission("leave_management.leave.balance.view"),
++    ]
++
++    def get_queryset(self):
++        """Get leave balances filtered by user."""
++        queryset = LeaveBalance.objects.filter(user_id=self.request.user.id).select_related("leave_category")
++        return queryset
++
++
++# -- Leave Request Views --
++
++
++class LeaveRequestListView(generics.ListAPIView):
++    """List leave requests."""
++
++    permission_classes = [
++        HasModuleGrant("leave_management"),
++        HasPermission("leave_management.leave.view"),
++    ]
++
++    def get_queryset(self):
++        """Get leave requests filtered by user."""
++        queryset = LeaveRequest.objects.filter(user_id=self.request.user.id)
++        return queryset
++
++
++class LeaveRequestDetailView(generics.RetrieveAPIView):
++    """Get a specific leave request."""
++
++    permission_classes = [
++        HasModuleGrant("leave_management"),
++        HasPermission("leave_management.leave.view"),
++    ]
++
++    def get_queryset(self):
++        """Get leave requests filtered by user."""
++        queryset = LeaveRequest.objects.filter(user_id=self.request.user.id)
++        return queryset
++
++
++class LeaveRequestCreateView(generics.CreateAPIView):
++    """Create a new leave request."""
++
++    permission_classes = [
++        HasModuleGrant("leave_management"),
++        HasPermission("leave_management.leave.create"),
++    ]
++
++    def create(self, request, *args, **kwargs):
++        """Create a leave request."""
++        serializer = sv.LeaveRequestCreateSerializer(data=request.data)
++        if serializer.is_valid():
++            data = serializer.validated_data
++            # TODO: Implement business logic here
++            # Create the leave request
++            from modules.leave.models import LeaveRequest
++            request_instance = LeaveRequest.objects.create(**data)
++            return Response(serializer.data, status=status.HTTP_201_CREATED)
++        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
++
++
++class LeaveRequestApproveView(APIView):
++    """Approve a leave request."""
++
++    permission_classes = [
++        HasModuleGrant("leave_management"),
++        HasPermission("leave_management.leave.approve"),
++    ]
++
++    def post(self, request, pk):
++        """Approve a leave request."""
++        # TODO: Implement business logic here
++        # Update the leave request status
++        from modules.leave.models import LeaveRequest
++        request_instance = LeaveRequest.objects.get(pk=pk)
++        request_instance.status = "approved"
++        request_instance.save()
++        # Create audit trail
++        from modules.leave.models import LeaveRequestAudit
++        audit = LeaveRequestAudit.objects.create(
++            request=request_instance,
++            action="approve",
++            previous_status="pending",
++            new_status="approved",
++            actor=request.user,
++            actor_type="Unit Head",
++        )
++        return Response({"status": "approved"}, status=status.HTTP_200_OK)
++
++
++class LeaveRequestCancelView(APIView):
++    """Cancel a leave request."""
++
++    permission_classes = [
++        HasModuleGrant("leave_management"),
++        HasPermission("leave_management.leave.cancel"),
++    ]
++
++    def post(self, request, pk):
++        """Cancel a leave request."""
++        # TODO: Implement business logic here
++        from modules.leave.models import LeaveRequest, LeaveRequestAudit
++        request_instance = LeaveRequest.objects.get(pk=pk)
++        request_instance.status = "cancelled"
++        request_instance.cancelled_by = request.user
++        request_instance.cancelled_at = timezone.now()
++        request_instance.save()
++        # Create audit trail
++        audit = LeaveRequestAudit.objects.create(
++            request=request_instance,
++            action="cancel",
++            previous_status="approved",
++            new_status="cancelled",
++            actor=request.user,
++            actor_type="Unit Head",
++        )
++        return Response({"status": "cancelled"}, status=status.HTTP_200_OK)
++
++
++class LeaveRequestResumeView(APIView):
++    """Resume a leave request after resignation."""
++
++    permission_classes = [
++        HasModuleGrant("leave_management"),
++        HasPermission("leave_management.leave.view"),
++    ]
++
++    def post(self, request, pk):
++        """Resume a leave request."""
++        # TODO: Implement business logic here
++        from modules.leave.models import LeaveRequest, LeaveRequestAudit
++        request_instance = LeaveRequest.objects.get(pk=pk)
++        request_instance.status = "resumed"
++        request_instance.resumed_by = request.user
++        request_instance.resumed_at = timezone.now()
++        request_instance.save()
++        # Create audit trail
++        audit = LeaveRequestAudit.objects.create(
++            request=request_instance,
++            action="resumefromresigned",
++            previous_status="cancelled",
++            new_status="resumed",
++            actor=request.user,
++            actor_type="Unit Head",
++        )
++        return Response({"status": "resumed"}, status=status.HTTP_200_OK)
++
++
++class LeaveRequestExtendView(APIView):
++    """Extend a leave request."""
++
++    permission_classes = [
++        HasModuleGrant("leave_management"),
++        HasPermission("leave_management.leave.view"),
++    ]
++
++    def post(self, request, pk):
++        """Extend a leave request."""
++        # TODO: Implement business logic here
++        from modules.leave.models import LeaveRequest, LeaveRequestAudit
++        request_instance = LeaveRequest.objects.get(pk=pk)
++        # Extend the leave request
++        request_instance.end_date = request.data.get("end_date")
++        request_instance.duration_days = request.data.get("duration_days", 1)
++        request_instance.save()
++        # Create audit trail
++        audit = LeaveRequestAudit.objects.create(
++            request=request_instance,
++            action="extend",
++            previous_status="approved",
++            new_status="approved",
++            actor=request.user,
++            actor_type="Unit Head",
++        )
++        return Response({"status": "extended"}, status=status.HTTP_200_OK)
++
++
++class LeaveRequestWithdrawView(APIView):
++    """Withdraw a pending leave request."""
++
++    permission_classes = [
++        HasModuleGrant("leave_management"),
++        HasPermission("leave_management.leave.view"),
++    ]
++
++    def post(self, request, pk):
++        """Withdraw a pending leave request."""
++        # TODO: Implement business logic here
++        from modules.leave.models import LeaveRequest, LeaveRequestAudit
++        request_instance = LeaveRequest.objects.get(pk=pk)
++        request_instance.status = "draft"
++        request_instance.save()
++        # Create audit trail
++        audit = LeaveRequestAudit.objects.create(
++            request=request_instance,
++            action="withdraw",
++            previous_status="pending",
++            new_status="draft",
++            actor=request.user,
++            actor_type="Unit Head",
++        )
++        return Response({"status": "withdrawn"}, status=status.HTTP_200_OK)
++
++
++# -- Leave Policy Views --
++
++
++class LeavePolicyListView(generics.ListAPIView):
++    """List leave policies."""
++
++    permission_classes = [
++        HasModuleGrant("leave_management"),
++        HasPermission("leave_management.leave.policy.view"),
++    ]
++
++    def get_queryset(self):
++        """Get leave policies."""
++        queryset = LeavePolicy.objects.filter(is_active=True)
++        return queryset
++
++
++class LeavePolicyDetailView(generics.RetrieveAPIView):
++    """Get a specific leave policy."""
++
++    permission_classes = [
++        HasModuleGrant("leave_management"),
++        HasPermission("leave_management.leave.policy.view"),
++    ]
++
++    def get_queryset(self):
++        """Get leave policies."""
++        queryset = LeavePolicy.objects.filter(is_active=True)
++        return queryset
++
++
++class LeavePolicyUpdateView(generics.UpdateAPIView):
++    """Update a leave policy (admin only)."""
++
++    permission_classes = [
++        HasModuleGrant("leave_management"),
++        HasPermission("leave_management.leave.policy.manage"),
++    ]
++
++    def get_queryset(self):
++        """Get leave policies."""
++        queryset = LeavePolicy.objects.all()
++        return queryset
++
++
++# -- Leave Sanction Views --
++
++
++class LeaveSanctionListView(generics.ListAPIView):
++    """List leave sanctions."""
++
++    permission_classes = [
++        HasModuleGrant("leave_management"),
++        HasPermission("leave_management.leave.sanction.view"),
++    ]
++
++    def get_queryset(self):
++        """Get leave sanctions."""
++        queryset = LeaveRequestAudit.objects.all()
++        return queryset
++
++
++class LeaveSanctionDetailView(generics.RetrieveAPIView):
++    """Get a specific leave sanction."""
++
++    permission_classes = [
++        HasModuleGrant("leave_management"),
++        HasPermission("leave_management.leave.sanction.view"),
++    ]
++
++    def get_queryset(self):
++        """Get leave sanctions."""
++        queryset = LeaveRequestAudit.objects.all()
++        return queryset
++
++
++class LeaveSanctionCreateView(APIView):
++    """Create a leave sanction."""
++
++    permission_classes = [
++        HasModuleGrant("leave_management"),
++        HasPermission("leave_management.leave.sanction.view"),
++    ]
++
++    def post(self, request, request_id):
++        """Create a leave sanction."""
++        # TODO: Implement business logic here
++        from modules.leave.models import LeaveRequest, LeaveSanction
++        request_instance = LeaveRequest.objects.get(pk=request_id)
++        sanction = LeaveSanction.objects.create(
++            request=request_instance,
++            authority=request.data.get("authority"),
++            authority_type=request.data.get("authority_type"),
++            decision=request.data.get("decision"),
++            notes=request.data.get("notes"),
++        )
++        return Response({"status": sanction.decision}, status=status.HTTP_201_CREATED)
++
++
++# -- Leave Category Views --
++
++
++class LeaveCategoryListView(generics.ListAPIView):
++    """List leave categories."""
++
++    permission_classes = [
++        HasModuleGrant("leave_management"),
++        HasPermission("leave_management.leave.view"),
++    ]
++
++    def get_queryset(self):
++        """Get leave categories."""
++        return LeaveCategory.objects.all()
++
++
++class LeaveCategoryDetailView(generics.RetrieveAPIView):
++    """Get a specific leave category."""
++
++    permission_classes = [
++        HasModuleGrant("leave_management"),
++        HasPermission("leave_management.leave.view"),
++    ]
++
++    def get_queryset(self):
++        """Get leave categories."""
++        return LeaveCategory.objects.all()
++
++
++# -- Holiday Calendar Views --
++
++
++class LeaveHolidayCalendarListView(generics.ListAPIView):
++    """List holiday calendars."""
++
++    permission_classes = [
++        HasModuleGrant("leave_management"),
++        HasPermission("leave_management.leave.holiday.view"),
++    ]
++
++    def get_queryset(self):
++        """Get holiday calendars."""
++        queryset = LeavePolicy.objects.all()  # TODO: Use LeaveHolidayCalendar model
++        return queryset
++
++
++class LeaveHolidayCalendarDetailView(generics.RetrieveAPIView):
++    """Get a specific holiday calendar."""
++
++    permission_classes = [
++        HasModuleGrant("leave_management"),
++        HasPermission("leave_management.leave.holiday.view"),
++    ]
++
++    def get_queryset(self):
++        """Get holiday calendars."""
++        queryset = LeavePolicy.objects.all()  # TODO: Use LeaveHolidayCalendar model
++        return queryset
+diff --git a/modules/leave/apps.py b/modules/leave/apps.py
+new file mode 100644
+index 0000000..834ca69
+--- /dev/null
++++ b/modules/leave/apps.py
+@@ -0,0 +1,25 @@
++"""Leave Management Django app configuration.
++
++Follows placement module pattern: AppConfig with ready() for check
++registration. MODULE/NAV_ITEMS with permission filtering.
++"""
++from django.apps import AppConfig
++
++
++class LeaveConfig(AppConfig):
++    """Leave Management app configuration."""
++    name = "modules.leave"
++    verbose_name = "Employee Leave Management"
++
++    def ready(self):
++        """Register system checks and other initialization."""
++        # Import here to avoid circular imports
++        from modules.leave import checks
++        from modules.leave import permissions
++        from modules.leave import registry
++
++        # Run system checks
++        checks.ready()
++
++        # Register module and navigation items
++        registry.ready()
+diff --git a/modules/leave/contracts.py b/modules/leave/contracts.py
+new file mode 100644
+index 0000000..0085605
+--- /dev/null
++++ b/modules/leave/contracts.py
+@@ -0,0 +1,153 @@
++"""Leave Management data contracts.
++
++THE ONLY thing other modules may import. All inter-module communication
++through this file.
++"""
++from __future__ import annotations
++
++from dataclasses import dataclass, field
++from datetime import date
++from typing import Optional
++
++
++@dataclass
++class LeaveCategoryResponse:
++    """Leave category information."""
++    code: str
++    label: str
++    description: Optional[str] = None
++
++
++@dataclass
++class LeaveBalanceResponse:
++    """Employee leave balance."""
++    user_id: int
++    kind: str
++    category_code: str
++    year: int
++    available: float
++    used: float
++    carried_over: float
++    entitlement: float
++    created_at: Optional[date] = None
++
++
++@dataclass
++class LeaveRequestResponse:
++    """Leave request application."""
++    id: int
++    user_id: int
++    category_code: str
++    category_label: str
++    status: str
++    request_type: str
++    start_date: date
++    end_date: date
++    duration_days: int
++    reason: str
++    station_leave: bool
++    approved_by: Optional[str] = None
++    approved_at: Optional[date] = None
++    cancelled_by: Optional[str] = None
++    cancelled_at: Optional[date] = None
++    resumed_by: Optional[str] = None
++    resumed_at: Optional[date] = None
++    created_at: Optional[date] = None
++    updated_at: Optional[date] = None
++
++
++@dataclass
++class LeaveRequestAuditResponse:
++    """Leave request audit log entry."""
++    id: int
++    request_id: int
++    action: str
++    previous_status: Optional[str]
++    new_status: str
++    actor: str
++    actor_type: str
++    timestamp: date
++    notes: Optional[str] = None
++
++
++@dataclass
++class LeaveSanctionResponse:
++    """Sanctioning authority decision."""
++    id: int
++    request_id: int
++    authority: str
++    authority_type: str
++    decision: str
++    decision_at: date
++    notes: Optional[str] = None
++
++
++@dataclass
++class LeavePolicyResponse:
++    """Leave policy configuration."""
++    policy_name: str
++    version: str
++    effective_from: date
++    effective_to: Optional[date] = None
++    cl_entitlement: float
++    rh_entitlement: float
++    scl_entitlement: float
++    el_carry_forward: bool
++    is_active: bool
++    created_at: Optional[date] = None
++    updated_at: Optional[date] = None
++
++
++@dataclass
++class LeaveRequestCreateInput:
++    """Input for creating a leave request."""
++    user_id: int
++    category_code: str
++    start_date: date
++    end_date: date
++    reason: str
++    station_leave: bool = False
++
++
++@dataclass
++class LeaveRequestUpdateInput:
++    """Input for updating a leave request (draft only)."""
++    reason: Optional[str] = None
++    start_date: Optional[date] = None
++    end_date: Optional[date] = None
++    duration_days: Optional[int] = None
++
++
++@dataclass
++class LeaveBalanceQueryInput:
++    """Input for querying leave balances."""
++    user_id: int
++    kind: Optional[str] = None
++    year: Optional[int] = None
++
++
++@dataclass
++class LeaveRequestQueryInput:
++    """Input for querying leave requests."""
++    user_id: Optional[int] = None
++    category_code: Optional[str] = None
++    status: Optional[str] = None
++    request_type: Optional[str] = None
++
++
++@dataclass
++class LeaveSanctionInput:
++    """Input for adding a sanction."""
++    request_id: int
++    authority: str
++    authority_type: str
++    decision: str
++    notes: Optional[str] = None
++
++
++@dataclass
++class LeaveHolidayCalendarResponse:
++    """Holiday calendar entry."""
++    year: int
++    holidays: list[dict]
++    published_at: Optional[date] = None
+diff --git a/modules/leave/domain/eligibility.py b/modules/leave/domain/eligibility.py
+new file mode 100644
+index 0000000..c07974f
+--- /dev/null
++++ b/modules/leave/domain/eligibility.py
+@@ -0,0 +1,197 @@
++"""Leave eligibility rules.
++
++Pure Python domain logic following BR-EL-001 through BR-EL-015.
++No Django/DRF imports here.
++"""
++from __future__ import annotations
++from dataclasses import dataclass
++from datetime import date
++from typing import Optional
++
++
++@dataclass
++class LeaveEligibilityResult:
++    """Result of leave eligibility check."""
++    is_eligible: bool
++    category: Optional[str] = None
++    reason: Optional[str] = None
++    available_days: float = 0.0
++
++
++class EligibilityRules:
++    """Business rules for leave eligibility."""
++    
++    # BR-EL-001: Supported leave-category eligibility
++    SUPPORTED_CATEGORIES = {"CL", "RH", "SCL", "EL", "COL", "VL"}
++    
++    # BR-EL-002: Casual Leave entitlement and lapse
++    CL_ENTITLEMENT = 8
++    CL_LAPSE = True  # Unused CL lapses at year end
++    
++    # BR-EL-003: Restricted Holiday entitlement and applicability
++    RH_ENTITLEMENT = 2
++    RH_LAPSE = True  # Unused RH lapses at year end
++    
++    # BR-EL-004: Special Casual Leave entitlement and admissibility
++    SCL_ENTITLEMENT = 15
++    SCL_ADMISSIBLE = True  # Requires specific authority
++    
++    # BR-EL-005: Non-faculty Earned Leave credit and carry-forward
++    EL_CARRY_FORWARD = True  # EL can carry forward
++    
++    # BR-EL-006: Faculty Vacation Leave entitlement
++    VL_CARRY_FORWARD = True  # VL can carry forward
++    
++    # BR-EL-007: VL-to-EL year-end conversion
++    VL_TO_EL_CONVERSION = True
++    
++    # BR-EL-008: Treatment of EL created by VL conversion
++    EL_FROM_VL_IS_EL = True
++    
++    # BR-EL-009: Commuted Leave entitlement and treatment
++    COL_CARRY_FORWARD = True
++    
++    def __init__(self, leave_balances):
++        """Initialize with leave balance data."""
++        self.leave_balances = leave_balances
++    
++    def is_category_supported(self, category: str) -> tuple[bool, str]:
++        """BR-EL-001: Check if leave category is supported."""
++        if category not in self.SUPPORTED_CATEGORIES:
++            return False, f"Category {category} is not supported. Supported: {self.SUPPORTED_CATEGORIES}"
++        return True, None
++    
++    def get_entitlement(self, category: str, year: int, kind: str) -> tuple[float, str]:
++        """Get leave entitlement for a category."""
++        if category == "CL":
++            return self.CL_ENTITLEMENT, "Casual Leave"
++        elif category == "RH":
++            return self.RH_ENTITLEMENT, "Restricted Holiday"
++        elif category == "SCL":
++            return self.SCL_ENTITLEMENT, "Special Casual Leave"
++        elif category == "EL":
++            return self.EL_CARRY_FORWARD, "Earned Leave"
++        elif category == "COL":
++            return self.COL_CARRY_FORWARD, "Commuted Leave"
++        elif category == "VL":
++            return self.VL_CARRY_FORWARD, "Vacation Leave"
++        return 0, "Unknown"
++    
++    def check_balance(self, user_id: int, category: str, year: int, kind: str) -> LeaveEligibilityResult:
++        """Check if user has sufficient leave balance."""
++        if category not in self.SUPPORTED_CATEGORIES:
++            return LeaveEligibilityResult(
++                is_eligible=False,
++                reason=f"Category {category} is not supported.",
++                category=category
++            )
++        
++        # Get balance for this year
++        balance = self.leave_balances.get((kind, category, year))
++        if not balance:
++            return LeaveEligibilityResult(
++                is_eligible=False,
++                reason=f"No leave balance record found for {kind}/{category}/{year}",
++                category=category
++            )
++        
++        available = balance.available
++        requested = self._calculate_duration(category, year, user_id, kind)
++        
++        if available < requested:
++            return LeaveEligibilityResult(
++                is_eligible=False,
++                reason=f"Insufficient balance: {available:.2f} available, {requested:.2f} requested",
++                category=category
++            )
++        
++        return LeaveEligibilityResult(
++            is_eligible=True,
++            category=category,
++            available_days=available
++        )
++    
++    def _calculate_duration(self, category: str, year: int, user_id: int, kind: str) -> float:
++        """Calculate requested duration based on category rules."""
++        # This would normally be calculated from start_date and end_date
++        # For now, return a placeholder
++        return 1.0
++    
++    def check_scl_authority(self, user_id: int, kind: str) -> tuple[bool, str]:
++        """BR-EL-004: Check if user has authority for SCL."""
++        if kind == "faculty":
++            return True, "Faculty has SCL authority"
++        elif kind == "staff":
++            return False, "Staff does not have SCL authority"
++        return False, "Unknown employee kind"
++    
++    def check_eligibility(self, user_id: int, category: str, year: int, kind: str) -> LeaveEligibilityResult:
++        """Complete eligibility check."""
++        # Check category support
++        is_supported, error = self.is_category_supported(category)
++        if not is_supported:
++            return LeaveEligibilityResult(
++                is_eligible=False,
++                reason=error,
++                category=category
++            )
++        
++        # Check authority for SCL
++        if category == "SCL":
++            has_authority, authority_error = self.check_scl_authority(user_id, kind)
++            if not has_authority:
++                return LeaveEligibilityResult(
++                    is_eligible=False,
++                    reason=authority_error,
++                    category=category
++                )
++        
++        # Check balance
++        return self.check_balance(user_id, category, year, kind)
++
++
++def calculate_available_cl(kind: str, year: int) -> float:
++    """BR-EL-002: Calculate available CL."""
++    from modules.leave.domain import eligibility as el
++    
++    # In production, this would query the database
++    return el.ELIGIBILITY_RULES.CL_ENTITLEMENT
++
++
++def calculate_available_rh(kind: str, year: int) -> float:
++    """BR-EL-003: Calculate available RH."""
++    from modules.leave.domain import eligibility as el
++    
++    return el.ELIGIBILITY_RULES.RH_ENTITLEMENT
++
++
++def calculate_available_scl(kind: str, year: int) -> float:
++    """BR-EL-004: Calculate available SCL."""
++    from modules.leave.domain import eligibility as el
++    
++    return el.ELIGIBILITY_RULES.SCL_ENTITLEMENT
++
++
++# Access the rules instance (would be initialized from database in production)
++ELIGIBILITY_RULES = None
++
++
++def get_eligibility_rules() -> EligibilityRules:
++    """Get the eligibility rules instance."""
++    global ELIGIBILITY_RULES
++    if ELIGIBILITY_RULES is None:
++        from modules.leave.models import LeaveBalance
++        # In production, query the database
++        ELIGIBILITY_RULES = EligibilityRules({})
++    return ELIGIBILITY_RULES
++
++
++def check_leave_eligibility(user_id: int, category: str, year: int, kind: str) -> LeaveEligibilityResult:
++    """Check leave eligibility for a user."""
++    return get_eligibility_rules().check_eligibility(user_id, category, year, kind)
++
++
++def can_take_leave(user_id: int, category: str, year: int, kind: str) -> bool:
++    """Check if user can take leave."""
++    result = check_leave_eligibility(user_id, category, year, kind)
++    return result.is_eligible
+diff --git a/modules/leave/domain/state_machine.py b/modules/leave/domain/state_machine.py
+new file mode 100644
+index 0000000..fc66cec
+--- /dev/null
++++ b/modules/leave/domain/state_machine.py
+@@ -0,0 +1,196 @@
++"""Leave request state machine.
++
++Pure Python domain logic following BR-EL-022 through BR-EL-035.
++No Django/DRF imports here.
++"""
++from __future__ import annotations
++from dataclasses import dataclass
++from enum import Enum
++from typing import Optional
++from datetime import date
++
++
++class LeaveRequestState(Enum):
++    """Leave request states."""
++    DRAFT = "draft"
++    PENDING = "pending"
++    APPROVED = "approved"
++    CANCELLED = "cancelled"
++    RESUMED = "resumed"
++
++
++class LeaveRequestStateMachine:
++    """State machine for leave requests following BR-EL-022 through BR-EL-035."""
++    
++    # Valid transitions
++    TRANSITIONS = {
++        # Initial state
++        LeaveRequestState.DRAFT: {
++            "submit": LeaveRequestState.PENDING,
++            "cancel": LeaveRequestState.CANCELLED,
++        },
++        # Pending state
++        LeaveRequestState.PENDING: {
++            "approve": LeaveRequestState.APPROVED,
++            "reject": LeaveRequestState.CANCELLED,
++            "withdraw": LeaveRequestState.DRAFT,
++        },
++        # Approved state
++        LeaveRequestState.APPROVED: {
++            "cancel": LeaveRequestState.CANCELLED,
++            "resumefromresigned": LeaveRequestState.RESUMED,
++        },
++        # Cancelled state - final state
++        LeaveRequestState.CANCELLED: {},
++        # Resumed state - final state
++        LeaveRequestState.RESUMED: {},
++    }
++    
++    # BR-EL-022: Immediate withdrawal of pending request
++    WITHDRAWAL_ALLOWED = True
++    
++    # BR-EL-023: Cancellation of approved leave before start
++    CANCELLATION_BEFORE_START = True
++    
++    # BR-EL-024: Fresh application after cancellation
++    FRESH_APPLICATION_ALLOWED = True
++    
++    # BR-EL-025: Extension of ongoing EL/COL/VL
++    EXTENSION_ALLOWED = True
++    
++    # BR-EL-027: Resumption applicability and review authority
++    RESUMPTION_REQUIRES_REVIEW = True
++    
++    # BR-EL-028: Normal, early, and late resumption outcome
++    RESUMPTION_OUTCOMES = ["Normal", "Early", "Late"]
++    
++    def __init__(self, request_state: LeaveRequestState):
++        """Initialize state machine with current state."""
++        self.current_state = request_state
++        self.transitions = self.TRANSITIONS.get(request_state, {})
++        self.history: list[str] = []
++    
++    def can_transition(self, action: str) -> tuple[bool, str]:
++        """Check if transition is valid."""
++        if self.current_state not in self.transitions:
++            return False, f"Unknown state: {self.current_state}"
++        
++        if action not in self.transitions[self.current_state]:
++            return False, f"Invalid transition from {self.current_state}: {action}"
++        
++        return True, None
++    
++    def transition(self, action: str) -> LeaveRequestState:
++        """Execute transition."""
++        if not self.can_transition(action):
++            raise ValueError(f"Cannot transition from {self.current_state} with {action}")
++        
++        new_state = self.transitions[self.current_state][action]
++        self.current_state = new_state
++        self.history.append(f"{self.current_state.value} -> {new_state.value}")
++        return new_state
++    
++    def get_current_state(self) -> LeaveRequestState:
++        """Get current state."""
++        return self.current_state
++    
++    def get_state_label(self) -> str:
++        """Get human-readable state label."""
++        return self.current_state.value
++    
++    def get_history(self) -> list[str]:
++        """Get transition history."""
++        return self.history
++    
++    def is_final_state(self) -> bool:
++        """Check if current state is final."""
++        return self.current_state in (LeaveRequestState.CANCELLED, LeaveRequestState.RESUMED)
++    
++    def get_next_allowed_actions(self) -> list[str]:
++        """Get list of allowed actions from current state."""
++        if self.current_state not in self.transitions:
++            return []
++        return list(self.transitions[self.current_state].keys())
++    
++    def validate_action(self, action: str, request: dict, current_date: date) -> tuple[bool, str]:
++        """Validate action based on business rules."""
++        # BR-EL-023: Cancellation of approved leave before start
++        if action == "cancel" and request.get("status") == "approved":
++            start_date = request.get("start_date")
++            if start_date and start_date < current_date:
++                return False, "Cannot cancel approved leave that has already started"
++        
++        # BR-EL-025: Extension of ongoing EL/COL/VL
++        if action == "extend" and request.get("status") in ("approved", "pending"):
++            if request.get("category") not in ("EL", "COL", "VL"):
++                return False, "Extension only allowed for EL, COL, or VL"
++        
++        # BR-EL-027: Resumption requires review
++        if action == "resumefromresigned":
++            if not request.get("resigned", False):
++                return False, "Resumption requires resignation record"
++        
++        # BR-EL-028: Normal, early, late resumption outcomes
++        if action == "resumefromresigned":
++            start_date = request.get("start_date")
++            current_date = date.today()
++            if start_date and start_date > current_date:
++                return False, "Resumption date cannot be in the future"
++        
++        return True, None
++
++
++class LeaveSanctionState:
++    """State machine for leave sanctioning."""
++    
++    SANCTION_STATES = [
++        "submitted",
++        "reviewing",
++        "approved",
++        "rejected",
++        "pending_escalation",
++    ]
++    
++    def __init__(self, state: str):
++        self.state = state
++        self.transitions = {
++            "submitted": ["reviewing"],
++            "reviewing": ["approved", "rejected", "pending_escalation"],
++            "approved": [],
++            "rejected": [],
++            "pending_escalation": ["approved", "rejected"],
++        }
++    
++    def can_transition(self, action: str) -> bool:
++        return self.state in self.transitions.get(action, [])
++    
++    def transition(self, action: str):
++        if not self.can_transition(action):
++            raise ValueError(f"Cannot transition from {self.state} to {action}")
++        self.state = action
++
++
++def get_valid_transition(
++    from_state: str, action: str
++) -> tuple[bool, str]:
++    """Get valid transition for a state machine."""
++    state_machine = LeaveRequestStateMachine(LeaveRequestState(from_state))
++    return state_machine.can_transition(action), None
++
++
++def get_next_state(
++    from_state: str, action: str
++) -> tuple[bool, str]:
++    """Get next state from a state machine."""
++    state_machine = LeaveRequestStateMachine(LeaveRequestState(from_state))
++    return True, state_machine.transitions[from_state][action]
++
++
++def get_request_state_label(state: str) -> str:
++    """Get human-readable state label."""
++    return LeaveRequestState(state).value if state in [s.value for s in LeaveRequestState] else state
++
++
++def get_request_state_value(label: str) -> str:
++    """Get state value from label."""
++    return LeaveRequestState(label).value if label in [s.value for s in LeaveRequestState] else label
+diff --git a/modules/leave/domain/validation.py b/modules/leave/domain/validation.py
+new file mode 100644
+index 0000000..71c0566
+--- /dev/null
++++ b/modules/leave/domain/validation.py
+@@ -0,0 +1,206 @@
++"""Leave request validation rules.
++
++Pure Python domain logic following BR-EL-034 and related validation rules.
++No Django/DRF imports here.
++"""
++from __future__ import annotations
++from dataclasses import dataclass
++from datetime import date
++from typing import Optional
++
++
++@dataclass
++class ValidationResult:
++    """Result of validation check."""
++    is_valid: bool
++    errors: list[str]
++    warnings: list[str]
++
++
++class LeaveRequestValidator:
++    """Validation rules for leave requests."""
++    
++    # BR-EL-011: Continuous-day counting
++    MIN_DURATION = 1
++    MAX_DURATION = 30  # Maximum continuous leave days
++    
++    # BR-EL-012: Applicant non-overlap with half-day CL exception
++    MIN_GAP_FOR_HALF_DAY = 1
++    
++    # BR-EL-034: No post-submission modification
++    DRAFT_ONLY_MODIFICATION = True
++    
++    # Minimum date difference for valid dates
++    MIN_DATE_DIFF_DAYS = 1
++    
++    def __init__(self, request_data: dict):
++        """Initialize validator with request data."""
++        self.request_data = request_data
++    
++    def validate_dates(self, start_date: date, end_date: date) -> ValidationResult:
++        """Validate date range."""
++        errors = []
++        warnings = []
++        
++        if not start_date or not end_date:
++            errors.append("Both start_date and end_date are required")
++            return ValidationResult(is_valid=False, errors=errors, warnings=warnings)
++        
++        if start_date > end_date:
++            errors.append("Start date must be before or equal to end date")
++        elif start_date == end_date:
++            warnings.append("Start and end date are the same - consider using a single day")
++        
++        # Check for continuous days (BR-EL-011)
++        days_between = (end_date - start_date).days + 1
++        if days_between < self.MIN_DURATION:
++            errors.append(f"Leave duration must be at least {self.MIN_DURATION} day(s)")
++        elif days_between > self.MAX_DURATION:
++            warnings.append(f"Leave duration of {days_between} days exceeds maximum of {self.MAX_DURATION} days")
++        
++        return ValidationResult(
++            is_valid=len(errors) == 0,
++            errors=errors,
++            warnings=warnings
++        )
++    
++    def validate_leave_category(self, category: str) -> ValidationResult:
++        """Validate leave category."""
++        errors = []
++        warnings = []
++        
++        valid_categories = ["CL", "RH", "SCL", "EL", "COL", "VL"]
++        if category not in valid_categories:
++            errors.append(f"Invalid leave category: {category}. Must be one of: {valid_categories}")
++        
++        return ValidationResult(is_valid=len(errors) == 0, errors=errors, warnings=warnings)
++    
++    def validate_scl_authority(self, kind: str) -> ValidationResult:
++        """Validate SCL authority (BR-EL-004)."""
++        errors = []
++        warnings = []
++        
++        if kind == "staff" and self.request_data.get("category") == "SCL":
++            errors.append("Staff members cannot apply for Special Casual Leave")
++        
++        return ValidationResult(is_valid=len(errors) == 0, errors=errors, warnings=warnings)
++    
++    def validate_station_leave(self, category: str) -> ValidationResult:
++        """Validate Station Leave coupling (BR-EL-013)."""
++        errors = []
++        warnings = []
++        
++        if self.request_data.get("station_leave"):
++            if category not in ["CL", "RH"]:
++                errors.append("Station Leave is only applicable to CL and RH")
++        
++        return ValidationResult(is_valid=len(errors) == 0, errors=errors, warnings=warnings)
++    
++    def validate_non_overlap(self, half_day_leaves: list[date]) -> ValidationResult:
++        """Validate non-overlap with half-day CL (BR-EL-012)."""
++        errors = []
++        warnings = []
++        
++        if not half_day_leaves:
++            return ValidationResult(is_valid=True, errors=errors, warnings=warnings)
++        
++        for half_day_date in half_day_leaves:
++            if self.request_data.get("start_date", date.today()) >= half_day_date:
++                errors.append(f"Leave overlaps with half-day CL on {half_day_date}")
++        
++        return ValidationResult(is_valid=len(errors) == 0, errors=errors, warnings=warnings)
++    
++    def validate_no_post_submission_modification(self, is_draft: bool) -> ValidationResult:
++        """BR-EL-034: No post-submission modification."""
++        errors = []
++        warnings = []
++        
++        if not is_draft and self.request_data.get("status") != "draft":
++            errors.append("Cannot modify leave request after submission")
++            return ValidationResult(is_valid=False, errors=errors, warnings=warnings)
++        
++        return ValidationResult(is_valid=True, errors=errors, warnings=warnings)
++    
++    def validate_duration_calculation(self, start_date: date, end_date: date, category: str) -> ValidationResult:
++        """Validate duration calculation based on category."""
++        errors = []
++        warnings = []
++        
++        days = (end_date - start_date).days + 1
++        
++        if category == "CL" or category == "RH":
++            # Half-day treatment applies
++            if days > 1:
++                warnings.append(f"Half-day CL treatment will apply for {days} days")
++        
++        return ValidationResult(is_valid=True, errors=errors, warnings=warnings)
++    
++    def validate_all(self, **kwargs) -> ValidationResult:
++        """Run all validation checks."""
++        errors = []
++        warnings = []
++        
++        # Extract parameters
++        category = kwargs.get("category")
++        start_date = kwargs.get("start_date")
++        end_date = kwargs.get("end_date")
++        kind = kwargs.get("kind")
++        station_leave = kwargs.get("station_leave", False)
++        half_day_leaves = kwargs.get("half_day_leaves", [])
++        is_draft = kwargs.get("is_draft", True)
++        
++        # Run validation checks
++        errors.extend([e for e in self.validate_dates(start_date, end_date).errors])
++        errors.extend([e for e in self.validate_leave_category(category).errors])
++        
++        if category == "SCL":
++            errors.extend([e for e in self.validate_scl_authority(kind).errors])
++        
++        errors.extend([e for e in self.validate_station_leave(station_leave).errors])
++        errors.extend([e for e in self.validate_non_overlap(half_day_leaves).errors])
++        errors.extend([e for e in self.validate_no_post_submission_modification(is_draft).errors])
++        
++        if start_date and end_date:
++            errors.extend([e for e in self.validate_duration_calculation(start_date, end_date, category).errors])
++        
++        return ValidationResult(
++            is_valid=len(errors) == 0,
++            errors=errors,
++            warnings=[w for w in self.validate_dates(start_date, end_date).warnings]
++        )
++
++
++def validate_leave_request(
++    category: str,
++    start_date: date,
++    end_date: date,
++    kind: str,
++    station_leave: bool = False,
++    half_day_leaves: list[date] = [],
++    is_draft: bool = True,
++) -> ValidationResult:
++    """Validate a leave request."""
++    validator = LeaveRequestValidator({})
++    return validator.validate_all(
++        category=category,
++        start_date=start_date,
++        end_date=end_date,
++        kind=kind,
++        station_leave=station_leave,
++        half_day_leaves=half_day_leaves,
++        is_draft=is_draft,
++    )
++
++
++def get_error_message(error: str) -> str:
++    """Convert error to user-friendly message."""
++    error_messages = {
++        "Invalid leave category": "Please select a valid leave category",
++        "Start date must be before or equal to end date": "Start date cannot be after end date",
++        "Leave duration must be at least 1 day(s)": "Leave must be for at least one day",
++        "Staff members cannot apply for Special Casual Leave": "Staff members cannot apply for SCL",
++        "Station Leave is only applicable to CL and RH": "Station Leave is only for CL and RH",
++        "Cannot modify leave request after submission": "Leave requests cannot be modified after submission",
++        "Leave duration exceeds maximum": "Leave duration exceeds the maximum allowed",
++    }
++    return error_messages.get(error, error)
+diff --git a/modules/leave/models.py b/modules/leave/models.py
+new file mode 100644
+index 0000000..0441445
+--- /dev/null
++++ b/modules/leave/models.py
+@@ -0,0 +1,191 @@
++"""Leave Management data models.
++
++A local projection of the leave system. Kept for joins (you cannot ORDER BY a
++field that lives behind an HTTP call) and for resilience while IAM is briefly
++down. A cache with a table, never a source of truth — nothing here is edited by
++hand.
++"""
++from django.db import models
++
++from core.db.mixins import TimeStampedModel
++
++
++class LeaveCategory(models.Model):
++    """Supported leave categories."""
++    CODE_CHOICES = [
++        ("CL", "Casual Leave"),
++        ("RH", "Restricted Holiday"),
++        ("SCL", "Special Casual Leave"),
++        ("EL", "Earned Leave"),
++        ("COL", "Commuted Leave"),
++        ("VL", "Vacation Leave"),
++    ]
++
++    code = models.CharField(max_length=2, primary_key=True)
++    label = models.CharField(max_length=64)
++    description = models.TextField(blank=True)
++
++    class Meta:
++        db_table = "leave_categories"
++        ordering = ["code"]
++
++    def __str__(self) -> str:
++        return self.label
++
++
++class LeaveBalance(models.Model):
++    """Employee leave balance tracking."""
++    EMPLOYEE_KIND_CHOICES = [
++        ("faculty", "Faculty"),
++        ("staff", "Staff"),
++        ("student", "Student"),
++    ]
++
++    employee_id = models.IntegerField(primary_key=True)  # IAM's id
++    kind = models.CharField(max_length=16, choices=EMPLOYEE_KIND_CHOICES, db_index=True)
++    leave_category = models.ForeignKey(
++        LeaveCategory, on_delete=models.CASCADE, related_name="balances"
++    )
++    year = models.PositiveSmallIntegerField()
++    available = models.DecimalField(max_digits=6, decimal_places=2, default=0.00)
++    used = models.DecimalField(max_digits=6, decimal_places=2, default=0.00)
++    carried_over = models.DecimalField(max_digits=6, decimal_places=2, default=0.00)
++    entitlement = models.DecimalField(max_digits=6, decimal_places=2, default=0.00)
++    created_at = models.DateTimeField(auto_now_add=True)
++
++    class Meta:
++        db_table = "leave_balances"
++        ordering = ["kind", "leave_category", "year", "-created_at"]
++        indexes = [
++            models.Index(fields=["kind", "leave_category", "year"]),
++        ]
++
++    def __str__(self) -> str:
++        return f"{self.employee_id} - {self.kind} - {self.leave_category.code} - {self.year}"
++
++
++class LeaveRequest(models.Model):
++    """Leave request application."""
++    STATUS_CHOICES = [
++        ("draft", "Draft"),
++        ("pending", "Pending"),
++        ("approved", "Approved"),
++        ("cancelled", "Cancelled"),
++        ("resumed", "Resumed"),
++    ]
++
++    REQUEST_TYPE_CHOICES = [
++        ("initial", "Initial Request"),
++        ("extension", "Extension Request"),
++        ("resumption", "Resumption Request"),
++    ]
++
++    user_id = models.IntegerField(primary_key=True)  # IAM's id
++    leave_category = models.ForeignKey(
++        LeaveCategory, on_delete=models.CASCADE, related_name="requests"
++    )
++    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="draft")
++    request_type = models.CharField(
++        max_length=20, choices=REQUEST_TYPE_CHOICES, default="initial"
++    )
++    start_date = models.DateField()
++    end_date = models.DateField()
++    duration_days = models.PositiveIntegerField()
++    reason = models.TextField()
++    station_leave = models.BooleanField(default=False)
++    approved_by = models.CharField(max_length=64, blank=True)
++    approved_at = models.DateTimeField(null=True, blank=True)
++    cancelled_by = models.CharField(max_length=64, blank=True)
++    cancelled_at = models.DateTimeField(null=True, blank=True)
++    resumed_by = models.CharField(max_length=64, blank=True)
++    resumed_at = models.DateTimeField(null=True, blank=True)
++    created_at = models.DateTimeField(auto_now_add=True)
++    updated_at = models.DateTimeField(auto_now=True)
++
++    class Meta:
++        db_table = "leave_requests"
++        ordering = ["-created_at"]
++        indexes = [
++            models.Index(fields=["user_id", "status"]),
++            models.Index(fields=["leave_category", "status"]),
++            models.Index(fields=["status"]),
++        ]
++
++    def __str__(self) -> str:
++        return f"{self.user_id} - {self.leave_category.code} - {self.status}"
++
++
++class LeaveRequestAudit(models.Model):
++    """Append-only audit trail for leave requests."""
++    request = models.ForeignKey(
++        LeaveRequest, on_delete=models.CASCADE, related_name="audits"
++    )
++    action = models.CharField(max_length=64)
++    previous_status = models.CharField(max_length=20, blank=True)
++    new_status = models.CharField(max_length=20)
++    actor = models.CharField(max_length=64)
++    actor_type = models.CharField(max_length=32)
++    timestamp = models.DateTimeField(auto_now_add=True)
++    notes = models.TextField(blank=True)
++
++    class Meta:
++        db_table = "leave_request_audits"
++        ordering = ["-timestamp"]
++
++    def __str__(self) -> str:
++        return f"{self.request.id} - {self.action} - {self.actor}"
++
++
++class LeaveSanction(models.Model):
++    """Sanctioning authority decision on leave request."""
++    request = models.ForeignKey(
++        LeaveRequest, on_delete=models.CASCADE, related_name="sanctions"
++    )
++    authority = models.CharField(max_length=64)  # e.g., "Unit Head", "Dean"
++    authority_type = models.CharField(max_length=32)  # e.g., "Processing", "Sanctioning"
++    decision = models.CharField(max_length=64)  # "Approved", "Rejected", "Pending"
++    decision_at = models.DateTimeField(auto_now_add=True)
++    notes = models.TextField(blank=True)
++
++    class Meta:
++        db_table = "leave_sanctions"
++        ordering = ["-decision_at"]
++
++    def __str__(self) -> str:
++        return f"{self.request.id} - {self.authority} - {self.decision}"
++
++
++class LeaveHolidayCalendar(models.Model):
++    """Published holiday/RH calendar."""
++    year = models.PositiveSmallIntegerField(unique=True)
++    holidays = models.JSONField(default=list, blank=True)  # List of {date, description}
++    published_at = models.DateTimeField(null=True, blank=True)
++
++    class Meta:
++        db_table = "leave_holiday_calendars"
++        ordering = ["year"]
++
++    def __str__(self) -> str:
++        return f"{self.year} Holiday Calendar"
++
++
++class LeavePolicy(models.Model):
++    """Leave policy configuration."""
++    policy_name = models.CharField(max_length=128, unique=True)
++    version = models.CharField(max_length=32, unique=True)
++    effective_from = models.DateField()
++    effective_to = models.DateField(null=True, blank=True)
++    cl_entitlement = models.DecimalField(max_digits=6, decimal_places=2, default=8.00)
++    rh_entitlement = models.DecimalField(max_digits=6, decimal_places=2, default=2.00)
++    scl_entitlement = models.DecimalField(max_digits=6, decimal_places=2, default=15.00)
++    el_carry_forward = models.BooleanField(default=True)
++    is_active = models.BooleanField(default=True)
++    created_at = models.DateTimeField(auto_now_add=True)
++    updated_at = models.DateTimeField(auto_now=True)
++
++    class Meta:
++        db_table = "leave_policies"
++        ordering = ["-effective_from"]
++
++    def __str__(self) -> str:
++        return f"{self.policy_name} v{self.version}"
+diff --git a/modules/leave/registry.py b/modules/leave/registry.py
+new file mode 100644
+index 0000000..6f97dcf
+--- /dev/null
++++ b/modules/leave/registry.py
+@@ -0,0 +1,85 @@
++"""Leave Management module registry.
++
++Defines MODULE and NAV_ITEMS with permission-based navigation.
++Follows placement module pattern.
++"""
++from __future__ import annotations
++
++from fusion_auth.permissions import HasModuleGrant, HasPermission
++
++
++# Module code - must match the module name
++MODULE = HasModuleGrant("leave_management")
++
++# Permission codes for leave operations
++P_VIEW_LEAVE = "leave_management.leave.view"
++P_VIEW_LEAVE_BALANCE = "leave_management.leave.balance.view"
++P_CREATE_LEAVE = "leave_management.leave.create"
++P_APPROVE_LEAVE = "leave_management.leave.approve"
++P_CANCEL_LEAVE = "leave_management.leave.cancel"
++P_VIEW_SANCTIONS = "leave_management.leave.sanction.view"
++P_VIEW_POLICIES = "leave_management.leave.policy.view"
++P_MANAGE_POLICIES = "leave_management.leave.policy.manage"
++P_VIEW_HOLIDAY_CALENDAR = "leave_management.leave.holiday.view"
++
++
++def _get_nav_items_for_role(permissions: frozenset) -> list[dict]:
++    """Filter navigation items based on user permissions."""
++    # Define navigation items for the leave module
++    NAV_ITEMS = [
++        {
++            "code": "leave_requests",
++            "label": "Leave Requests",
++            "icon": "FaCalendar",
++            "to": "/leave/requests/",
++            "required_permission": P_VIEW_LEAVE,
++        },
++        {
++            "code": "my_leave",
++            "label": "My Leave Balance",
++            "icon": "FaUserClock",
++            "to": "/leave/balance/",
++            "required_permission": P_VIEW_LEAVE_BALANCE,
++        },
++        {
++            "code": "leave_policy",
++            "label": "Leave Policy",
++            "icon": "FaFileContract",
++            "to": "/leave/policy/",
++            "required_permission": P_VIEW_POLICIES,
++        },
++        {
++            "code": "holiday_calendar",
++            "label": "Holiday Calendar",
++            "icon": "FaCalendarAlt",
++            "to": "/leave/holiday/",
++            "required_permission": P_VIEW_HOLIDAY_CALENDAR,
++        },
++        {
++            "code": "sanctions",
++            "label": "Sanctions",
++            "icon": "FaGavel",
++            "to": "/leave/sanctions/",
++            "required_permission": P_VIEW_SANCTIONS,
++        },
++    ]
++    
++    # Filter items based on permissions
++    filtered_items = []
++    for item in NAV_ITEMS:
++        if item["required_permission"]:
++            # Check if user has the required permission
++            if item["required_permission"] in permissions:
++                filtered_items.append(item)
++        else:
++            # No permission required, include by default
++            filtered_items.append(item)
++    
++    return filtered_items
++
++
++def get_nav_items() -> list[dict]:
++    """Get navigation items filtered by user's permissions."""
++    # In production, this would read from request.principal.permissions
++    # For now, return all items
++    return _get_nav_items_for_role(frozenset())
+diff --git a/modules/leave/services/__init__.py b/modules/leave/services/__init__.py
+new file mode 100644
+index 0000000..3e1c903
+--- /dev/null
++++ b/modules/leave/services/__init__.py
+@@ -0,0 +1 @@
++# Leave Management services
+diff --git a/modules/leave/services/serializers.py b/modules/leave/services/serializers.py
+new file mode 100644
+index 0000000..3f398cb
+--- /dev/null
++++ b/modules/leave/services/serializers.py
+@@ -0,0 +1,175 @@
++"""Leave Management serializers.
++
++Follows placement module pattern: thin serializers in api/serializers.py,
++service logic in services/serializers.py.
++"""
++from __future__ import annotations
++
++from datetime import date
++from typing import Optional
++
++from rest_framework import serializers
++
++
++class LeaveCategorySerializer(serializers.ModelSerializer):
++    """Leave category serializer."""
++    class Meta:
++        model = None  # Will be set based on use case
++        fields = ["code", "label", "description"]
++        extra_kwargs = {
++            "code": {"required": True},
++        }
++
++
++class LeaveBalanceSerializer(serializers.ModelSerializer):
++    """Leave balance serializer."""
++    class Meta:
++        model = None  # Will be set based on use case
++        fields = [
++            "user_id",
++            "kind",
++            "category_code",
++            "year",
++            "available",
++            "used",
++            "carried_over",
++            "entitlement",
++            "created_at",
++        ]
++        extra_kwargs = {
++            "available": {"read_only": True},
++            "used": {"read_only": True},
++            "created_at": {"read_only": True},
++        }
++
++
++class LeaveRequestSerializer(serializers.ModelSerializer):
++    """Leave request serializer."""
++    class Meta:
++        model = None  # Will be set based on use case
++        fields = [
++            "id",
++            "user_id",
++            "category_code",
++            "category_label",
++            "status",
++            "request_type",
++            "start_date",
++            "end_date",
++            "duration_days",
++            "reason",
++            "station_leave",
++            "approved_by",
++            "approved_at",
++            "cancelled_by",
++            "cancelled_at",
++            "resumed_by",
++            "resumed_at",
++            "created_at",
++            "updated_at",
++        ]
++        extra_kwargs = {
++            "start_date": {"required": True},
++            "end_date": {"required": True},
++            "reason": {"required": True},
++            "category_code": {"required": True},
++        }
++
++
++class LeaveRequestCreateSerializer(serializers.Serializer):
++    """Serializer for creating a leave request."""
++    user_id = serializers.IntegerField(required=True)
++    category_code = serializers.CharField(required=True, max_length=2)
++    start_date = serializers.DateField(required=True)
++    end_date = serializers.DateField(required=True)
++    reason = serializers.CharField(required=True)
++    station_leave = serializers.BooleanField(default=False)
++
++
++class LeaveRequestUpdateSerializer(serializers.Serializer):
++    """Serializer for updating a leave request (draft only)."""
++    reason = serializers.CharField(required=False, allow_blank=True)
++    start_date = serializers.DateField(required=False)
++    end_date = serializers.DateField(required=False)
++    duration_days = serializers.IntegerField(required=False, min_value=1)
++
++
++class LeaveBalanceQuerySerializer(serializers.Serializer):
++    """Serializer for querying leave balances."""
++    user_id = serializers.IntegerField(required=True)
++    kind = serializers.ChoiceField(
++        choices=[("faculty", "Faculty"), ("staff", "Staff"), ("student", "Student")],
++        required=False,
++    )
++    year = serializers.IntegerField(required=False)
++
++
++class LeaveRequestQuerySerializer(serializers.Serializer):
++    """Serializer for querying leave requests."""
++    user_id = serializers.IntegerField(required=False)
++    category_code = serializers.CharField(required=False, max_length=2)
++    status = serializers.ChoiceField(
++        choices=[
++            ("draft", "Draft"),
++            ("pending", "Pending"),
++            ("approved", "Approved"),
++            ("cancelled", "Cancelled"),
++            ("resumed", "Resumed"),
++        ],
++        required=False,
++    )
++    request_type = serializers.ChoiceField(
++        choices=[
++            ("initial", "Initial Request"),
++            ("extension", "Extension Request"),
++            ("resumption", "Resumption Request"),
++        ],
++        required=False,
++    )
++
++
++class LeaveSanctionSerializer(serializers.Serializer):
++    """Serializer for leave sanction."""
++    request_id = serializers.IntegerField(required=True)
++    authority = serializers.CharField(required=True)
++    authority_type = serializers.CharField(required=True)
++    decision = serializers.ChoiceField(
++        choices=[("Approved", "Approved"), ("Rejected", "Rejected"), ("Pending", "Pending")],
++        required=True,
++    )
++    notes = serializers.CharField(required=False, allow_blank=True)
++
++
++class LeavePolicySerializer(serializers.ModelSerializer):
++    """Leave policy serializer."""
++    class Meta:
++        model = None  # Will be set based on use case
++        fields = [
++            "policy_name",
++            "version",
++            "effective_from",
++            "effective_to",
++            "cl_entitlement",
++            "rh_entitlement",
++            "scl_entitlement",
++            "el_carry_forward",
++            "is_active",
++            "created_at",
++            "updated_at",
++        ]
++        extra_kwargs = {
++            "effective_from": {"read_only": True},
++            "effective_to": {"read_only": True},
++            "created_at": {"read_only": True},
++            "updated_at": {"read_only": True},
++        }
++
++
++class LeaveHolidayCalendarSerializer(serializers.Serializer):
++    """Holiday calendar serializer."""
++    year = serializers.IntegerField(required=True)
++    holidays = serializers.ListField(
++        child=serializers.DictField(keys=[("date", serializers.DateField), ("description", serializers.CharField)]),
++        required=True,
++    )
++    published_at = serializers.DateField(required=False)
+diff --git a/modules/leave/services/views.py b/modules/leave/services/views.py
+new file mode 100644
+index 0000000..2941e0a
+--- /dev/null
++++ b/modules/leave/services/views.py
+@@ -0,0 +1,244 @@
++"""Leave Management service views.
++
++Follows placement module pattern: thin HTTP layer in api/
++"""
++from __future__ import annotations
++
++from django.utils import timezone
++from rest_framework import generics, status
++from rest_framework.response import Response
++from rest_framework.views import APIView
++
++from fusion_auth.permissions import HasModuleGrant, HasPermission
++from modules.leave.api import serializers as s
++from modules.leave.api.permissions import ScopedCollection
++from modules.leave.authentication import (
++    COOKIE_NAME as LEAVE_COOKIE,
++    COOKIE_PATH as LEAVE_COOKIE_PATH,
++)
++from modules.leave.authentication import LeaveAuthentication
++from modules.leave.models import LeaveBalance, LeaveCategory, LeavePolicy, LeaveRequest, LeaveRequestAudit
++from modules.leave.services import serializers as sv
++
++
++MODULE = HasModuleGrant("leave_management")
++
++# Permission codes
++P_VIEW_LEAVE = "leave_management.leave.view"
++P_VIEW_LEAVE_BALANCE = "leave_management.leave.balance.view"
++P_CREATE_LEAVE = "leave_management.leave.create"
++P_APPROVE_LEAVE = "leave_management.leave.approve"
++P_CANCEL_LEAVE = "leave_management.leave.cancel"
++P_VIEW_SANCTIONS = "leave_management.leave.sanction.view"
++P_VIEW_POLICIES = "leave_management.leave.policy.view"
++
++
++def _actor(request):
++    """Get the current user from request."""
++    return getattr(request, "principal", None)
++
++
++def _client_ip(request):
++    """Get client IP address."""
++    from rest_framework.settings import api_settings
++
++    forwarded = request.META.get("HTTP_X_FORWARDED_FOR", "")
++    hops = api_settings.NUM_PROXIES or 0
++    if forwarded and hops:
++        addrs = [a.strip() for a in forwarded.split(",") if a.strip()]
++        if addrs:
++            return addrs[-min(hops, len(addrs))]
++    return request.META.get("REMOTE_ADDR")
++
++
++class _Scoped(generics.GenericAPIView):
++    """Leave module scoped views with authentication."""
++
++    authentication_classes = [LeaveAuthentication]
++
++    def get_serializer_context(self):
++        """Get serializer context with actor."""
++        ctx = super().get_serializer_context()
++        ctx["actor"] = _actor(self.request)
++        return ctx
++
++
++# -- Leave Balance Views ------------------------------------------------------
++
++
++class LeaveBalanceListView(_Scoped, generics.ListAPIView):
++    """List user's leave balances."""
++
++    permission_classes = [HasModuleGrant("leave_management"), HasPermission("leave_management.leave.balance.view")]
++
++    def get_queryset(self):
++        """Get leave balances filtered by user."""
++        queryset = LeaveBalance.objects.filter(user_id=self.request.user.id).select_related("leave_category")
++        return queryset
++
++    def get_serializer_context(self):
++        """Get serializer context."""
++        ctx = super().get_serializer_context()
++        ctx["user_id"] = self.request.user.id
++        ctx["actor"] = _actor(self.request)
++        return ctx
++
++    def get_serializer(self):
++        """Get serializer instance."""
++        return sv.LeaveBalanceSerializer
++
++
++# -- Leave Request Views ------------------------------------------------------
++
++
++class LeaveRequestListView(_Scoped, generics.ListAPIView):
++    """List leave requests."""
++
++    permission_classes = [HasModuleGrant("leave_management"), HasPermission("leave_management.leave.view")]
++
++    def get_queryset(self):
++        """Get leave requests filtered by user."""
++        queryset = LeaveRequest.objects.filter(user_id=self.request.user.id)
++        return queryset
++
++    def get_serializer_context(self):
++        """Get serializer context."""
++        ctx = super().get_serializer_context()
++        ctx["user_id"] = self.request.user.id
++        ctx["actor"] = _actor(self.request)
++        return ctx
++
++    def get_serializer(self):
++        """Get serializer instance."""
++        return sv.LeaveRequestSerializer
++
++
++class LeaveRequestCreateView(_Scoped, generics.CreateAPIView):
++    """Create a new leave request."""
++
++    permission_classes = [HasModuleGrant("leave_management"), HasPermission("leave_management.leave.create")]
++
++    def create(self, request, *args, **kwargs):
++        """Create a leave request."""
++        serializer = sv.LeaveRequestCreateSerializer(data=request.data)
++        if serializer.is_valid():
++            data = serializer.validated_data
++            # Business logic would go here
++            return Response(serializer.data, status=status.HTTP_201_CREATED)
++        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
++
++    def get_serializer(self):
++        """Get serializer instance."""
++        return sv.LeaveRequestCreateSerializer
++
++
++class LeaveRequestUpdateView(_Scoped, generics.UpdateAPIView):
++    """Update a leave request (draft only)."""
++
++    permission_classes = [HasModuleGrant("leave_management"), HasPermission("leave_management.leave.view")]
++
++    def get_queryset(self):
++        """Get leave requests filtered by user."""
++        queryset = LeaveRequest.objects.filter(user_id=self.request.user.id)
++        return queryset
++
++    def get_serializer(self):
++        """Get serializer instance."""
++        return sv.LeaveRequestUpdateSerializer
++
++
++# -- Leave Policy Views -------------------------------------------------------
++
++
++class LeavePolicyListView(_Scoped, generics.ListAPIView):
++    """List leave policies."""
++
++    permission_classes = [HasModuleGrant("leave_management"), HasPermission("leave_management.leave.policy.view")]
++
++    def get_queryset(self):
++        """Get leave policies."""
++        queryset = LeavePolicy.objects.filter(is_active=True)
++        return queryset
++
++    def get_serializer(self):
++        """Get serializer instance."""
++        return sv.LeavePolicySerializer
++
++
++class LeavePolicyDetailView(_Scoped, generics.RetrieveAPIView):
++    """Get a specific leave policy."""
++
++    permission_classes = [HasModuleGrant("leave_management"), HasPermission("leave_management.leave.policy.view")]
++
++    def get_queryset(self):
++        """Get leave policies."""
++        queryset = LeavePolicy.objects.filter(is_active=True)
++        return queryset
++
++    def get_serializer(self):
++        """Get serializer instance."""
++        return sv.LeavePolicySerializer
++
++
++class LeavePolicyUpdateView(_Scoped, generics.UpdateAPIView):
++    """Update a leave policy (admin only)."""
++
++    permission_classes = [HasModuleGrant("leave_management"), HasPermission("leave_management.leave.policy.manage")]
++
++    def get_queryset(self):
++        """Get leave policies."""
++        queryset = LeavePolicy.objects.all()
++        return queryset
++
++    def get_serializer(self):
++        """Get serializer instance."""
++        return sv.LeavePolicySerializer
++
++
++# -- Leave Sanction Views -----------------------------------------------------
++
++
++class LeaveSanctionListView(_Scoped, generics.ListAPIView):
++    """List leave sanctions."""
++
++    permission_classes = [HasModuleGrant("leave_management"), HasPermission("leave_management.leave.sanction.view")]
++
++    def get_queryset(self):
++        """Get leave sanctions."""
++        queryset = LeaveRequestAudit.objects.all()
++        return queryset
++
++    def get_serializer(self):
++        """Get serializer instance."""
++        return sv.LeaveRequestAuditSerializer
++
++
++# -- Leave Category Views -----------------------------------------------------
++
++
++class LeaveCategoryListView(_Scoped, generics.ListAPIView):
++    """List leave categories."""
++
++    permission_classes = [HasModuleGrant("leave_management"), HasPermission("leave_management.leave.view")]
++
++    def get_queryset(self):
++        """Get leave categories."""
++        return LeaveCategory.objects.all()
++
++    def get_serializer(self):
++        """Get serializer instance."""
++        return sv.LeaveCategorySerializer
++
++
++class LeaveCategoryDetailView(_Scoped, generics.RetrieveAPIView):
++    """Get a specific leave category."""
++
++    permission_classes = [HasModuleGrant("leave_management"), HasPermission("leave_management.leave.view")]
++
++    def get_queryset(self):
++        """Get leave categories."""
++        return LeaveCategory.objects.all()
++
++    def get_serializer(self):
++        """Get serializer instance."""
++        return sv.LeaveCategorySerializer

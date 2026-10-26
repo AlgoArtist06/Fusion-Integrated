@@ -1,0 +1,17 @@
+ modules/leave/__init__.py             |  37 ++++
+ modules/leave/api/authentication.py   | 176 +++++++++++++++
+ modules/leave/api/permissions.py      | 210 ++++++++++++++++++
+ modules/leave/api/serializers.py      | 147 +++++++++++++
+ modules/leave/api/urls.py             |  64 ++++++
+ modules/leave/api/views.py            | 400 ++++++++++++++++++++++++++++++++++
+ modules/leave/apps.py                 |  25 +++
+ modules/leave/contracts.py            | 153 +++++++++++++
+ modules/leave/domain/eligibility.py   | 197 +++++++++++++++++
+ modules/leave/domain/state_machine.py | 196 +++++++++++++++++
+ modules/leave/domain/validation.py    | 206 +++++++++++++++++
+ modules/leave/models.py               | 191 ++++++++++++++++
+ modules/leave/registry.py             |  85 ++++++++
+ modules/leave/services/__init__.py    |   1 +
+ modules/leave/services/serializers.py | 175 +++++++++++++++
+ modules/leave/services/views.py       | 244 +++++++++++++++++++++
+ 16 files changed, 2507 insertions(+)

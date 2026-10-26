@@ -1,0 +1,95 @@
+{
+  "run": "1012-235259_fnm_guide_module_0",
+  "config": "fnm_guide",
+  "task": "module",
+  "rep": 0,
+  "score": 95.0,
+  "wall_s": 1803,
+  "load_s": 49,
+  "timed_out": true,
+  "disk_abort": false,
+  "agent_rc": 143,
+  "min_mem_free_pct": 7,
+  "prompt_tokens": 68043.0,
+  "gen_tokens": 14444.0,
+  "pp_tps": 112.2,
+  "tg_tps": 12.8,
+  "tool_calls": 52,
+  "tool_errors": 8,
+  "turns": 36,
+  "compactions": 2,
+  "checks": [
+    {
+      "name": "registry declares guide perms+roles",
+      "weight": 10,
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "installed Django app",
+      "weight": 10,
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "manifest carries leave_elm grants",
+      "weight": 10,
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "hidden behaviour tests (of 9)",
+      "weight": 30.0,
+      "ok": true,
+      "detail": "9/9 passed"
+    },
+    {
+      "name": "gate: django check",
+      "weight": 5,
+      "ok": true,
+      "detail": "rc=0"
+    },
+    {
+      "name": "gate: migrations in sync",
+      "weight": 5,
+      "ok": true,
+      "detail": "rc=0"
+    },
+    {
+      "name": "gate: ruff",
+      "weight": 5,
+      "ok": true,
+      "detail": "rc=0"
+    },
+    {
+      "name": "gate: import contracts",
+      "weight": 5,
+      "ok": true,
+      "detail": "rc=0"
+    },
+    {
+      "name": "gate: ops checks",
+      "weight": 5,
+      "ok": false,
+      "detail": "stemExit(main())\n                     ^^^^^^\n  File \"/Users/ashutoshsaxena/fusion-pi-bench/base/ops/checks/nav_matches_routes.py\", line 51, in main\n    for item in registry.NAV_ITEMS:\n                ^^^^^^^^^^^^^^^^^^\nAttributeError: module 'modules.leave_elm.registry' has no attribute 'NAV_ITEMS'\n"
+    },
+    {
+      "name": "gate: permission manifest --check",
+      "weight": 5,
+      "ok": true,
+      "detail": "rc=0"
+    },
+    {
+      "name": "gate: openapi schema current",
+      "weight": 5,
+      "ok": true,
+      "detail": "rc=0"
+    },
+    {
+      "name": "gate: pytest",
+      "weight": 5,
+      "ok": true,
+      "detail": "rc=0"
+    }
+  ]
+}

@@ -1,0 +1,335 @@
+diff --git a/config/settings/base.py b/config/settings/base.py
+index 0dc7ada..7823fc4 100644
+--- a/config/settings/base.py
++++ b/config/settings/base.py
+@@ -90,6 +90,7 @@ PLATFORM_MODULES = [
+ # See docs/03-platform/module-authoring-guide.md to add one.
+ DOMAIN_MODULES = [
+     "modules.placement",
++    "modules.leave_elm",
+ ]
+ 
+ INSTALLED_APPS = (DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
+diff --git a/config/urls.py b/config/urls.py
+index 33f7835..591c811 100644
+--- a/config/urls.py
++++ b/config/urls.py
+@@ -16,6 +16,7 @@ urlpatterns = [
+     path("api/v1/", include("fusion_auth.urls")),
+     path("api/v1/directory/", include("modules.directory.api.urls")),
+     path("api/v1/placement/", include("modules.placement.api.urls")),
++    path("api/v1/leave/", include("modules.leave_elm.api.urls")),
+     path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
+     path("api/docs/", SpectacularSwaggerView.as_view(url_name="schema"), name="docs"),
+ ]
+diff --git a/docs/02-iam/permission-catalog.generated.md b/docs/02-iam/permission-catalog.generated.md
+index 6d74853..19a9d9b 100644
+--- a/docs/02-iam/permission-catalog.generated.md
++++ b/docs/02-iam/permission-catalog.generated.md
+@@ -13,6 +13,14 @@ For the intended taxonomy of modules not yet built, see
+ |---|---|---|
+ | `directory.user.search` | Search the institute directory | `Dean Academic`, `acadadmin`, `placement_chairman`, `placement_coordinator`, `placement_officer` |
+ 
++## `leave_elm`
++
++| Code | What it allows | Held by |
++|---|---|---|
++| `leave_elm.application.view` | See leave applications | `Employee`, `Leave Approver` |
++| `leave_elm.application.apply` | Submit a leave application | `Employee` |
++| `leave_elm.application.approve` | Approve or reject a leave application | `Leave Approver` |
++
+ ## `placement_cell`
+ 
+ | Code | What it allows | Held by |
+diff --git a/modules/leave_elm/__init__.py b/modules/leave_elm/__init__.py
+new file mode 100644
+index 0000000..e69de29
+diff --git a/modules/leave_elm/api/__init__.py b/modules/leave_elm/api/__init__.py
+new file mode 100644
+index 0000000..e69de29
+diff --git a/modules/leave_elm/api/serializers.py b/modules/leave_elm/api/serializers.py
+new file mode 100644
+index 0000000..234d482
+--- /dev/null
++++ b/modules/leave_elm/api/serializers.py
+@@ -0,0 +1,6 @@
++from rest_framework import serializers
++
++
++class LeaveApplicationSerializer(serializers.Serializer):
++    id = serializers.IntegerField(read_only=True)
++    status = serializers.CharField(read_only=True)
+diff --git a/modules/leave_elm/api/urls.py b/modules/leave_elm/api/urls.py
+new file mode 100644
+index 0000000..2d9efff
+--- /dev/null
++++ b/modules/leave_elm/api/urls.py
+@@ -0,0 +1,9 @@
++from django.urls import path
++
++from modules.leave_elm.api.views import LeaveApplicationView, LeaveApplyView, LeaveApproveView
++
++urlpatterns = [
++    path("applications", LeaveApplicationView.as_view(), name="leave-applications"),
++    path("apply", LeaveApplyView.as_view(), name="leave-apply"),
++    path("approve", LeaveApproveView.as_view(), name="leave-approve"),
++]
+diff --git a/modules/leave_elm/api/views.py b/modules/leave_elm/api/views.py
+new file mode 100644
+index 0000000..7be6c7a
+--- /dev/null
++++ b/modules/leave_elm/api/views.py
+@@ -0,0 +1,39 @@
++from drf_spectacular.utils import extend_schema
++from rest_framework.response import Response
++from rest_framework.views import APIView
++
++from fusion_auth.permissions import HasPermission
++from modules.leave_elm.api.serializers import LeaveApplicationSerializer
++
++
++@extend_schema(responses=LeaveApplicationSerializer)
++class LeaveApplicationView(APIView):
++    """View to list leave applications - protected by leave_elm.application.view."""
++
++    permission_classes = [HasPermission("leave_elm.application.view")]
++    serializer_class = LeaveApplicationSerializer
++
++    def get(self, request):
++        return Response({"message": "Leave applications view"})
++
++
++@extend_schema(responses=LeaveApplicationSerializer)
++class LeaveApplyView(APIView):
++    """View to submit leave application - protected by leave_elm.application.apply."""
++
++    permission_classes = [HasPermission("leave_elm.application.apply")]
++    serializer_class = LeaveApplicationSerializer
++
++    def post(self, request):
++        return Response({"message": "Leave applied"})
++
++
++@extend_schema(responses=LeaveApplicationSerializer)
++class LeaveApproveView(APIView):
++    """View to approve/reject leave application - protected by leave_elm.application.approve."""
++
++    permission_classes = [HasPermission("leave_elm.application.approve")]
++    serializer_class = LeaveApplicationSerializer
++
++    def post(self, request):
++        return Response({"message": "Leave approved"})
+diff --git a/modules/leave_elm/apps.py b/modules/leave_elm/apps.py
+new file mode 100644
+index 0000000..4b2c584
+--- /dev/null
++++ b/modules/leave_elm/apps.py
+@@ -0,0 +1,8 @@
++"""Leave Elm module app configuration."""
++from django.apps import AppConfig
++
++
++class LeaveElmConfig(AppConfig):
++    default_auto_field = 'django.db.models.BigAutoField'
++    name = 'modules.leave_elm'
++    verbose_name = 'Leave Management'
+diff --git a/modules/leave_elm/management/commands/__init__.py b/modules/leave_elm/management/commands/__init__.py
+new file mode 100644
+index 0000000..e69de29
+diff --git a/modules/leave_elm/registry.py b/modules/leave_elm/registry.py
+new file mode 100644
+index 0000000..c5e714a
+--- /dev/null
++++ b/modules/leave_elm/registry.py
+@@ -0,0 +1,36 @@
++"""What the server tells the shell about this module (ADR-0010).
++
++For a pure-API module with no screens, NAV_ITEMS is empty.
++"""
++MODULE = {
++    "code": "leave_elm", "label": "Leave Management", "icon": "CalendarCheck",
++    "base_path": "/leave", "nav_section": "Leave", "sort_order": 10,
++    "status": "active",
++}
++
++#: Every permission this module recognises; ROLE_GRANTS below says who holds each.
++PERMISSIONS = [
++    ("leave_elm.application.view", "See leave applications"),
++    ("leave_elm.application.apply", "Submit a leave application"),
++    ("leave_elm.application.approve", "Approve or reject a leave application"),
++]
++
++SYSTEM_PERMISSIONS = []
++
++#: Employee can view and apply for leave.
++_EMPLOYEE = [
++    "leave_elm.application.view",
++    "leave_elm.application.apply",
++]
++
++#: Leave Approver can view and approve/reject leave applications.
++_APPROVER = [
++    "leave_elm.application.view",
++    "leave_elm.application.approve",
++]
++
++#: Keyed by the designation name as it exists in globals_designation.
++ROLE_GRANTS = {
++    "Employee": _EMPLOYEE,
++    "Leave Approver": _APPROVER,
++}
+diff --git a/modules/leave_elm/services/__init__.py b/modules/leave_elm/services/__init__.py
+new file mode 100644
+index 0000000..e69de29
+diff --git a/modules/leave_elm/tests/__init__.py b/modules/leave_elm/tests/__init__.py
+new file mode 100644
+index 0000000..e69de29
+diff --git a/openapi/fusion-integrated.v1.yaml b/openapi/fusion-integrated.v1.yaml
+index 850dd24..5d4c008 100644
+--- a/openapi/fusion-integrated.v1.yaml
++++ b/openapi/fusion-integrated.v1.yaml
+@@ -63,6 +63,73 @@ paths:
+               schema:
+                 $ref: '#/components/schemas/UserSearchResult'
+           description: ''
++  /api/v1/leave/applications:
++    get:
++      operationId: v1_leave_applications_retrieve
++      description: View to list leave applications - protected by leave_elm.application.view.
++      tags:
++      - v1
++      security:
++      - iamSession: []
++      responses:
++        '200':
++          content:
++            application/json:
++              schema:
++                $ref: '#/components/schemas/LeaveApplication'
++          description: ''
++  /api/v1/leave/apply:
++    post:
++      operationId: v1_leave_apply_create
++      description: View to submit leave application - protected by leave_elm.application.apply.
++      tags:
++      - v1
++      requestBody:
++        content:
++          application/json:
++            schema:
++              $ref: '#/components/schemas/LeaveApplication'
++          application/x-www-form-urlencoded:
++            schema:
++              $ref: '#/components/schemas/LeaveApplication'
++          multipart/form-data:
++            schema:
++              $ref: '#/components/schemas/LeaveApplication'
++      security:
++      - iamSession: []
++      responses:
++        '200':
++          content:
++            application/json:
++              schema:
++                $ref: '#/components/schemas/LeaveApplication'
++          description: ''
++  /api/v1/leave/approve:
++    post:
++      operationId: v1_leave_approve_create
++      description: View to approve/reject leave application - protected by leave_elm.application.approve.
++      tags:
++      - v1
++      requestBody:
++        content:
++          application/json:
++            schema:
++              $ref: '#/components/schemas/LeaveApplication'
++          application/x-www-form-urlencoded:
++            schema:
++              $ref: '#/components/schemas/LeaveApplication'
++          multipart/form-data:
++            schema:
++              $ref: '#/components/schemas/LeaveApplication'
++      security:
++      - iamSession: []
++      responses:
++        '200':
++          content:
++            application/json:
++              schema:
++                $ref: '#/components/schemas/LeaveApplication'
++          description: ''
+   /api/v1/me:
+     get:
+       operationId: v1_me_retrieve
+@@ -2637,6 +2704,18 @@ components:
+         * `in_progress` - Selection in progress
+         * `completed` - Completed
+         * `cancelled` - Cancelled
++    LeaveApplication:
++      type: object
++      properties:
++        id:
++          type: integer
++          readOnly: true
++        status:
++          type: string
++          readOnly: true
++      required:
++      - id
++      - status
+     LiftSanction:
+       type: object
+       properties:
+diff --git a/registry/permissions.json b/registry/permissions.json
+index 213c8f2..a460853 100644
+--- a/registry/permissions.json
++++ b/registry/permissions.json
+@@ -34,6 +34,47 @@
+       "scope_permissions": [],
+       "system_permissions": []
+     },
++    "leave_elm": {
++      "grants": {
++        "Employee": [
++          "leave_elm.application.apply",
++          "leave_elm.application.view"
++        ],
++        "Leave Approver": [
++          "leave_elm.application.approve",
++          "leave_elm.application.view"
++        ]
++      },
++      "module_grants": [
++        "Employee",
++        "Leave Approver"
++      ],
++      "nav": {
++        "base_path": "/leave",
++        "icon": "CalendarCheck",
++        "items": [],
++        "label": "Leave Management",
++        "nav_section": "Leave",
++        "sort_order": 10,
++        "status": "active"
++      },
++      "permissions": [
++        {
++          "code": "leave_elm.application.view",
++          "label": "See leave applications"
++        },
++        {
++          "code": "leave_elm.application.apply",
++          "label": "Submit a leave application"
++        },
++        {
++          "code": "leave_elm.application.approve",
++          "label": "Approve or reject a leave application"
++        }
++      ],
++      "scope_permissions": [],
++      "system_permissions": []
++    },
+     "placement_cell": {
+       "grants": {
+         "Dean Academic": [
