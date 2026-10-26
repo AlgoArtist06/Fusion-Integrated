@@ -2,11 +2,9 @@
 
 Follows placement module pattern: URL patterns in api/urls.py.
 """
-from django.urls import path, include
+from django.urls import include, path
 
 from modules.leave.api import views as api_views
-from modules.leave.services import serializers as sv
-
 
 # -- Leave Balance URLs --
 leave_balance_urls = [

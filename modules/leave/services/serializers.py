@@ -5,9 +5,6 @@ service logic in services/serializers.py.
 """
 from __future__ import annotations
 
-from datetime import date
-from typing import Optional
-
 from rest_framework import serializers
 
 

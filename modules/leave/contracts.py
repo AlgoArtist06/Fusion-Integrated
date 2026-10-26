@@ -5,9 +5,8 @@ through this file.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import date
-from typing import Optional
 
 
 @dataclass
@@ -15,7 +14,7 @@ class LeaveCategoryResponse:
     """Leave category information."""
     code: str
     label: str
-    description: Optional[str] = None
+    description: str | None = None
 
 
 @dataclass
@@ -29,7 +28,7 @@ class LeaveBalanceResponse:
     used: float
     carried_over: float
     entitlement: float
-    created_at: Optional[date] = None
+    created_at: date | None = None
 
 
 @dataclass
@@ -46,14 +45,14 @@ class LeaveRequestResponse:
     duration_days: int
     reason: str
     station_leave: bool
-    approved_by: Optional[str] = None
-    approved_at: Optional[date] = None
-    cancelled_by: Optional[str] = None
-    cancelled_at: Optional[date] = None
-    resumed_by: Optional[str] = None
-    resumed_at: Optional[date] = None
-    created_at: Optional[date] = None
-    updated_at: Optional[date] = None
+    approved_by: str | None = None
+    approved_at: date | None = None
+    cancelled_by: str | None = None
+    cancelled_at: date | None = None
+    resumed_by: str | None = None
+    resumed_at: date | None = None
+    created_at: date | None = None
+    updated_at: date | None = None
 
 
 @dataclass
@@ -62,12 +61,12 @@ class LeaveRequestAuditResponse:
     id: int
     request_id: int
     action: str
-    previous_status: Optional[str]
+    previous_status: str | None
     new_status: str
     actor: str
     actor_type: str
     timestamp: date
-    notes: Optional[str] = None
+    notes: str | None = None
 
 
 @dataclass
@@ -79,7 +78,7 @@ class LeaveSanctionResponse:
     authority_type: str
     decision: str
     decision_at: date
-    notes: Optional[str] = None
+    notes: str | None = None
 
 
 @dataclass
@@ -88,14 +87,14 @@ class LeavePolicyResponse:
     policy_name: str
     version: str
     effective_from: date
-    effective_to: Optional[date] = None
+    effective_to: date | None = None
     cl_entitlement: float
     rh_entitlement: float
     scl_entitlement: float
     el_carry_forward: bool
     is_active: bool
-    created_at: Optional[date] = None
-    updated_at: Optional[date] = None
+    created_at: date | None = None
+    updated_at: date | None = None
 
 
 @dataclass
@@ -112,27 +111,27 @@ class LeaveRequestCreateInput:
 @dataclass
 class LeaveRequestUpdateInput:
     """Input for updating a leave request (draft only)."""
-    reason: Optional[str] = None
-    start_date: Optional[date] = None
-    end_date: Optional[date] = None
-    duration_days: Optional[int] = None
+    reason: str | None = None
+    start_date: date | None = None
+    end_date: date | None = None
+    duration_days: int | None = None
 
 
 @dataclass
 class LeaveBalanceQueryInput:
     """Input for querying leave balances."""
     user_id: int
-    kind: Optional[str] = None
-    year: Optional[int] = None
+    kind: str | None = None
+    year: int | None = None
 
 
 @dataclass
 class LeaveRequestQueryInput:
     """Input for querying leave requests."""
-    user_id: Optional[int] = None
-    category_code: Optional[str] = None
-    status: Optional[str] = None
-    request_type: Optional[str] = None
+    user_id: int | None = None
+    category_code: str | None = None
+    status: str | None = None
+    request_type: str | None = None
 
 
 @dataclass
@@ -142,7 +141,7 @@ class LeaveSanctionInput:
     authority: str
     authority_type: str
     decision: str
-    notes: Optional[str] = None
+    notes: str | None = None
 
 
 @dataclass
@@ -150,4 +149,4 @@ class LeaveHolidayCalendarResponse:
     """Holiday calendar entry."""
     year: int
     holidays: list[dict]
-    published_at: Optional[date] = None
+    published_at: date | None = None

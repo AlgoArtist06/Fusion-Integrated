@@ -4,22 +4,19 @@ Follows placement module pattern: thin HTTP layer in api/
 """
 from __future__ import annotations
 
-from django.utils import timezone
 from rest_framework import generics, status
 from rest_framework.response import Response
-from rest_framework.views import APIView
 
 from fusion_auth.permissions import HasModuleGrant, HasPermission
-from modules.leave.api import serializers as s
-from modules.leave.api.permissions import ScopedCollection
-from modules.leave.authentication import (
-    COOKIE_NAME as LEAVE_COOKIE,
-    COOKIE_PATH as LEAVE_COOKIE_PATH,
-)
 from modules.leave.authentication import LeaveAuthentication
-from modules.leave.models import LeaveBalance, LeaveCategory, LeavePolicy, LeaveRequest, LeaveRequestAudit
+from modules.leave.models import (
+    LeaveBalance,
+    LeaveCategory,
+    LeavePolicy,
+    LeaveRequest,
+    LeaveRequestAudit,
+)
 from modules.leave.services import serializers as sv
-
 
 MODULE = HasModuleGrant("leave_management")
 

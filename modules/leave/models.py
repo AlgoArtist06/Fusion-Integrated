@@ -7,8 +7,6 @@ hand.
 """
 from django.db import models
 
-from core.db.mixins import TimeStampedModel
-
 
 class LeaveCategory(models.Model):
     """Supported leave categories."""

@@ -11,9 +11,14 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from fusion_auth.permissions import HasModuleGrant, HasPermission
-from modules.leave.models import LeaveBalance, LeaveCategory, LeavePolicy, LeaveRequest, LeaveRequestAudit
+from modules.leave.models import (
+    LeaveBalance,
+    LeaveCategory,
+    LeavePolicy,
+    LeaveRequest,
+    LeaveRequestAudit,
+)
 from modules.leave.services import serializers as sv
-
 
 # -- Leave Balance Views --
 

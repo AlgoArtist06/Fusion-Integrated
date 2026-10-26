@@ -14,9 +14,7 @@ class LeaveConfig(AppConfig):
     def ready(self):
         """Register system checks and other initialization."""
         # Import here to avoid circular imports
-        from modules.leave import checks
-        from modules.leave import permissions
-        from modules.leave import registry
+        from modules.leave import checks, registry
 
         # Run system checks
         checks.ready()
