@@ -8,6 +8,8 @@ MODULE = {
     "status": "active",
 }
 
+NAV_ITEMS = []
+
 #: Every permission this module recognises; ROLE_GRANTS below says who holds each.
 PERMISSIONS = [
     ("leave_elm.application.view", "See leave applications"),
