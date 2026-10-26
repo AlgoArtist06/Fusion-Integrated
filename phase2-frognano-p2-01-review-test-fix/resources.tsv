@@ -1,0 +1,29 @@
+t	mem_free_pct	swap_used_mb	disk_free_gb	top_rss
+5	13	1922.44	6.95	3538MB llama-server; 181MB claude; 91MB npm exec ccstatusline; 74MB Code Helper (Renderer); 31MB com.apple.DriverKit-AppleBCMWLAN
+35	11	2061.38	6.93	3575MB llama-server; 245MB claude; 75MB Code Helper (Renderer); 31MB com.apple.DriverKit-AppleBCMWLAN; 25MB mds_stores
+65	14	2108.94	6.93	3624MB llama-server; 51MB claude; 38MB claude; 35MB Code Helper (Renderer); 35MB com.apple.DriverKit-AppleBCMWLAN
+96	14	2076.94	7.12	3672MB llama-server; 110MB claude; 42MB Code Helper (Renderer); 34MB com.apple.DriverKit-AppleBCMWLAN; 33MB mds_stores
+126	14	2052.94	7.12	3610MB llama-server; 146MB mds_stores; 43MB claude; 40MB claude; 34MB com.apple.DriverKit-AppleBCMWLAN
+156	12	2002.50	6.82	3630MB llama-server; 181MB mediaanalysisd; 123MB mds_stores; 33MB claude; 32MB com.apple.DriverKit-AppleBCMWLAN
+186	12	2012.69	4.72	3609MB llama-server; 184MB mediaanalysisd; 69MB mds_stores; 39MB claude; 31MB com.apple.DriverKit-AppleBCMWLAN
+216	13	1988.69	4.69	3614MB llama-server; 182MB mediaanalysisd; 95MB claude; 64MB mds_stores; 48MB claude
+247	11	2240.50	4.63	3642MB llama-server; 185MB mediaanalysisd; 61MB mds_stores; 33MB com.apple.DriverKit-AppleBCMWLAN; 24MB Code Helper (Renderer)
+277	16	2216.31	4.60	3723MB llama-server; 190MB mediaanalysisd; 128MB mds_stores; 59MB claude; 35MB com.apple.DriverKit-AppleBCMWLAN
+307	11	2190.06	4.40	3639MB llama-server; 186MB mediaanalysisd; 57MB mds_stores; 31MB com.apple.DriverKit-AppleBCMWLAN; 29MB claude
+337	11	2252.62	4.52	3639MB llama-server; 244MB mediaanalysisd; 73MB claude; 35MB mds_stores; 34MB com.apple.DriverKit-AppleBCMWLAN
+367	14	2172.62	4.49	3618MB llama-server; 191MB mediaanalysisd; 110MB mds_stores; 34MB com.apple.DriverKit-AppleBCMWLAN; 33MB claude
+398	10	2146.38	4.49	3619MB llama-server; 151MB mediaanalysisd; 95MB mds_stores; 30MB com.apple.DriverKit-AppleBCMWLAN; 30MB WindowServer
+428	10	2167.50	4.49	3615MB llama-server; 114MB claude; 65MB Code Helper (Renderer); 47MB mds_stores; 31MB com.apple.DriverKit-AppleBCMWLAN
+458	13	2160.62	4.51	3717MB llama-server; 204MB mds_stores; 32MB com.apple.DriverKit-AppleBCMWLAN; 22MB Code Helper (Renderer); 21MB claude
+488	13	2112.62	4.39	3618MB llama-server; 135MB mds_stores; 115MB claude; 34MB com.apple.DriverKit-AppleBCMWLAN; 22MB Code Helper (Renderer)
+519	11	2111.00	5.38	3617MB llama-server; 243MB mds_stores; 33MB com.apple.DriverKit-AppleBCMWLAN; 18MB Code Helper (Renderer); 17MB Storage
+549	12	2100.88	7.47	3649MB llama-server; 174MB mds_stores; 32MB com.apple.DriverKit-AppleBCMWLAN; 27MB Code Helper (Renderer); 24MB Storage
+579	11	2375.31	7.85	3641MB llama-server; 123MB claude; 76MB Code Helper (Renderer); 51MB Electron; 33MB com.apple.DriverKit-AppleBCMWLAN
+609	12	2457.19	7.85	3642MB llama-server; 257MB claude; 76MB Code Helper (Renderer); 33MB com.apple.DriverKit-AppleBCMWLAN; 25MB Storage
+639	14	2403.88	7.85	3642MB llama-server; 117MB claude; 70MB claude; 38MB Code Helper (Renderer); 34MB com.apple.DriverKit-AppleBCMWLAN
+669	14	2370.25	7.84	3642MB llama-server; 151MB claude; 81MB claude; 53MB Code Helper (Renderer); 45MB pi
+700	11	2424.38	7.84	3642MB llama-server; 190MB claude; 67MB Code Helper (Renderer); 48MB Electron; 31MB com.apple.DriverKit-AppleBCMWLAN
+730	12	2407.31	7.84	3643MB llama-server; 220MB claude; 82MB Code Helper (Renderer); 32MB com.apple.DriverKit-AppleBCMWLAN; 27MB claude
+760	13	2383.19	7.84	3642MB llama-server; 72MB claude; 65MB claude; 35MB claude; 34MB com.apple.DriverKit-AppleBCMWLAN
+790	12	2485.44	7.84	3642MB llama-server; 135MB claude; 74MB claude; 74MB Code Helper (Renderer); 48MB Electron
+820	11	2469.19	7.84	3642MB llama-server; 125MB claude; 85MB Code Helper (Renderer); 83MB claude; 38MB pi

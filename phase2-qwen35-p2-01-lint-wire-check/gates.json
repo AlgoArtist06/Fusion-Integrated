@@ -1,0 +1,10 @@
+[
+  {
+    "name": "quick-check",
+    "cmd": "sh ~/a6/orch/quick-check.sh",
+    "ok": false,
+    "rc": 1,
+    "seconds": 0,
+    "tail": "ok: django check\nok: migrations in sync\nFAILED: ruff\n    -         return queryset\n205 +         return LeaveRequestAudit.objects.all()\n206 |\n    |\nnote: This is an unsafe fix and may change runtime behavior\n\nE501 Line too long (107 > 100)\n   --> modules/leave/services/views.py:219:101\n    |\n217 |     \"\"\"List leave categories.\"\"\"\n218 |\n219 |     permission_classes = [HasModuleGrant(\"leave_management\"), HasPermission(\"leave_management.leave.view\")]\n    |                                                                                                     ^^^^^^^\n220 |\n221 |     def get_queryset(self):\n    |\n\nE501 Line too long (107 > 100)\n   --> modules/leave/services/views.py:233:101\n    |\n231 |     \"\"\"Get a specific leave category.\"\"\"\n232 |\n233 |     permission_classes = [HasModuleGrant(\"leave_management\"), HasPermission(\"leave_management.leave.view\")]\n    |                                                                                                     ^^^^^^^\n234 |\n235 |     def get_queryset(self):\n    |\n\nFound 95 errors.\n[*] 2 fixable with `--fix` (37 unsafe fixes available with `--fix --unsafe-fixes`)."
+  }
+]

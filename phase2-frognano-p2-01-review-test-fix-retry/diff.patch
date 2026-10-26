@@ -1,0 +1,155 @@
+diff --git a/modules/leave_elm/api/views.py b/modules/leave_elm/api/views.py
+index 7be6c7a..9a23ee9 100644
+--- a/modules/leave_elm/api/views.py
++++ b/modules/leave_elm/api/views.py
+@@ -2,7 +2,8 @@ from drf_spectacular.utils import extend_schema
+ from rest_framework.response import Response
+ from rest_framework.views import APIView
+ 
+-from fusion_auth.permissions import HasPermission
++from fusion_auth.permissions import HasModuleGrant, HasPermission
++from modules.leave_elm.registry import MODULE
+ from modules.leave_elm.api.serializers import LeaveApplicationSerializer
+ 
+ 
+@@ -10,7 +11,7 @@ from modules.leave_elm.api.serializers import LeaveApplicationSerializer
+ class LeaveApplicationView(APIView):
+     """View to list leave applications - protected by leave_elm.application.view."""
+ 
+-    permission_classes = [HasPermission("leave_elm.application.view")]
++    permission_classes = [MODULE, HasPermission("leave_elm.application.view")]
+     serializer_class = LeaveApplicationSerializer
+ 
+     def get(self, request):
+@@ -21,7 +22,7 @@ class LeaveApplicationView(APIView):
+ class LeaveApplyView(APIView):
+     """View to submit leave application - protected by leave_elm.application.apply."""
+ 
+-    permission_classes = [HasPermission("leave_elm.application.apply")]
++    permission_classes = [MODULE, HasPermission("leave_elm.application.apply")]
+     serializer_class = LeaveApplicationSerializer
+ 
+     def post(self, request):
+@@ -32,7 +33,7 @@ class LeaveApplyView(APIView):
+ class LeaveApproveView(APIView):
+     """View to approve/reject leave application - protected by leave_elm.application.approve."""
+ 
+-    permission_classes = [HasPermission("leave_elm.application.approve")]
++    permission_classes = [MODULE, HasPermission("leave_elm.application.approve")]
+     serializer_class = LeaveApplicationSerializer
+ 
+     def post(self, request):
+diff --git a/modules/leave_elm/registry.py b/modules/leave_elm/registry.py
+index c5e714a..7dfee47 100644
+--- a/modules/leave_elm/registry.py
++++ b/modules/leave_elm/registry.py
+@@ -8,6 +8,8 @@ MODULE = {
+     "status": "active",
+ }
+ 
++NAV_ITEMS = []
++
+ #: Every permission this module recognises; ROLE_GRANTS below says who holds each.
+ PERMISSIONS = [
+     ("leave_elm.application.view", "See leave applications"),
+diff --git a/modules/leave_elm/tests/test_api.py b/modules/leave_elm/tests/test_api.py
+new file mode 100644
+index 0000000..d485971
+--- /dev/null
++++ b/modules/leave_elm/tests/test_api.py
+@@ -0,0 +1,95 @@
++"""API tests for leave_elm module."""
++import pytest
++from rest_framework.test import APIClient
++
++from conftest import make_session
++
++pytestmark = pytest.mark.django_db
++
++
++def _client(stub_iam, **kw):
++    stub_iam(make_session(**kw))
++    c = APIClient()
++    c.credentials(HTTP_AUTHORIZATION="Token abc")
++    return c
++
++
++def test_leave_applications_with_view_permission(stub_iam):
++    """GET /api/v1/leave/applications with leave_elm.application.view returns 200."""
++    stub_iam(make_session(
++        user_id=1001, modules=("leave_elm",),
++        permissions=("leave_elm.application.view",),
++    ))
++    c = _client(stub_iam)
++    assert c.get("/api/v1/leave/applications").status_code == 200
++
++
++def test_leave_applications_without_view_permission(stub_iam):
++    """GET /api/v1/leave/applications with module grant but no view permission returns 403."""
++    stub_iam(make_session(
++        user_id=1001, modules=("leave_elm",),
++        permissions=("leave_elm.application.apply",),
++    ))
++    c = _client(stub_iam)
++    assert c.get("/api/v1/leave/applications").status_code == 403
++
++
++def test_leave_applications_no_session(stub_iam):
++    """GET /api/v1/leave/applications without session returns 401/403."""
++    c = APIClient()
++    # No credentials set
++    assert c.get("/api/v1/leave/applications").status_code in (401, 403)
++
++
++def test_leave_apply_with_apply_permission(stub_iam):
++    """POST /api/v1/leave/apply with leave_elm.application.apply returns 200."""
++    stub_iam(make_session(
++        user_id=1001, modules=("leave_elm",),
++        permissions=("leave_elm.application.apply",),
++    ))
++    c = _client(stub_iam)
++    assert c.post("/api/v1/leave/apply").status_code == 200
++
++
++def test_leave_apply_without_apply_permission(stub_iam):
++    """POST /api/v1/leave/apply with module grant but no apply permission returns 403."""
++    stub_iam(make_session(
++        user_id=1001, modules=("leave_elm",),
++        permissions=("leave_elm.application.view",),
++    ))
++    c = _client(stub_iam)
++    assert c.post("/api/v1/leave/apply").status_code == 403
++
++
++def test_leave_apply_no_session(stub_iam):
++    """POST /api/v1/leave/apply without session returns 401/403."""
++    c = APIClient()
++    # No credentials set
++    assert c.post("/api/v1/leave/apply").status_code in (401, 403)
++
++
++def test_leave_approve_with_approve_permission(stub_iam):
++    """POST /api/v1/leave/approve with leave_elm.application.approve returns 200."""
++    stub_iam(make_session(
++        user_id=1001, modules=("leave_elm",),
++        permissions=("leave_elm.application.approve",),
++    ))
++    c = _client(stub_iam)
++    assert c.post("/api/v1/leave/approve").status_code == 200
++
++
++def test_leave_approve_without_approve_permission(stub_iam):
++    """POST /api/v1/leave/approve with module grant but no approve permission returns 403."""
++    stub_iam(make_session(
++        user_id=1001, modules=("leave_elm",),
++        permissions=("leave_elm.application.view",),
++    ))
++    c = _client(stub_iam)
++    assert c.post("/api/v1/leave/approve").status_code == 403
++
++
++def test_leave_approve_no_session(stub_iam):
++    """POST /api/v1/leave/approve without session returns 401/403."""
++    c = APIClient()
++    # No credentials set
++    assert c.post("/api/v1/leave/approve").status_code in (401, 403)

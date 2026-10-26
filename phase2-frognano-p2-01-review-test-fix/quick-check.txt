@@ -1,0 +1,15 @@
+ok: django check
+ok: migrations in sync
+ok: ruff
+ok: import contracts (lint-imports)
+ok: no cross-module foreign keys
+ok: contract getters plural
+FAILED: sidebar matches client routes
+Traceback (most recent call last):
+  File "/Users/ashutoshsaxena/a6/impl-frognano/ops/checks/nav_matches_routes.py", line 91, in <module>
+    raise SystemExit(main())
+                     ^^^^^^
+  File "/Users/ashutoshsaxena/a6/impl-frognano/ops/checks/nav_matches_routes.py", line 51, in main
+    for item in registry.NAV_ITEMS:
+                ^^^^^^^^^^^^^^^^^^
+AttributeError: module 'modules.leave_elm.registry' has no attribute 'NAV_ITEMS'

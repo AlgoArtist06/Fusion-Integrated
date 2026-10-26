@@ -1,0 +1,10 @@
+[
+  {
+    "name": "quick-check",
+    "cmd": "sh ~/a6/orch/quick-check.sh",
+    "ok": false,
+    "rc": 1,
+    "seconds": 0,
+    "tail": "ok: django check\nok: migrations in sync\nFAILED: ruff\n  | |________________________________________________________________________^\nhelp: Organize imports\n  |\n5 | from fusion_auth.permissions import HasModuleGrant, HasPermission\n6 + from modules.leave_elm.api.serializers import LeaveApplicationSerializer\n7 | from modules.leave_elm.registry import MODULE\n  - from modules.leave_elm.api.serializers import LeaveApplicationSerializer\n8 |\n  |\n\nF401 [*] `fusion_auth.permissions.HasModuleGrant` imported but unused\n --> modules/leave_elm/api/views.py:5:37\n  |\n3 | from rest_framework.views import APIView\n4 |\n5 | from fusion_auth.permissions import HasModuleGrant, HasPermission\n  |                                     ^^^^^^^^^^^^^^\n6 | from modules.leave_elm.registry import MODULE\n7 | from modules.leave_elm.api.serializers import LeaveApplicationSerializer\n  |\nhelp: Remove unused import: `fusion_auth.permissions.HasModuleGrant`\n  |\n4 |\n  - from fusion_auth.permissions import HasModuleGrant, HasPermission\n5 + from fusion_auth.permissions import HasPermission\n6 | from modules.leave_elm.registry import MODULE\n  |\n\nFound 2 errors.\n[*] 2 fixable with `--fix`."
+  }
+]

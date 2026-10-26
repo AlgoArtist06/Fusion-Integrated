@@ -1,0 +1,25 @@
+{
+  "run": "1026-133149_p2-01-lint-wire-check",
+  "impl": "qwen35",
+  "tag": "p2-01-lint-wire-check",
+  "wall_s": 900,
+  "load_s": 5,
+  "timed_out": true,
+  "disk_abort": false,
+  "mem_abort": false,
+  "agent_rc": 143,
+  "min_mem_free_pct": 12,
+  "prompt_tokens": 15698.0,
+  "gen_tokens": 5327.0,
+  "pp_tps": 102.4,
+  "tg_tps": 8.2,
+  "tool_calls": 37,
+  "tool_errors": 12,
+  "turns": 37,
+  "compactions": 0,
+  "model_errors": 0,
+  "gates_ok": [],
+  "gates_failed": [
+    "quick-check"
+  ]
+}

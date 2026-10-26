@@ -1,0 +1,25 @@
+{
+  "run": "1026-134726_p2-01-review-test-fix-retry",
+  "impl": "frognano",
+  "tag": "p2-01-review-test-fix-retry",
+  "wall_s": 900,
+  "load_s": 8,
+  "timed_out": true,
+  "disk_abort": false,
+  "mem_abort": false,
+  "agent_rc": 143,
+  "min_mem_free_pct": 10,
+  "prompt_tokens": 12175.0,
+  "gen_tokens": 8309.0,
+  "pp_tps": 79.6,
+  "tg_tps": 13.8,
+  "tool_calls": 42,
+  "tool_errors": 10,
+  "turns": 41,
+  "compactions": 0,
+  "model_errors": 0,
+  "gates_ok": [],
+  "gates_failed": [
+    "quick-check"
+  ]
+}

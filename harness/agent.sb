@@ -1,0 +1,9 @@
+(version 1)
+(allow default)
+(deny file-write* (subpath "/Users/ashutoshsaxena"))
+(allow file-write*
+  (subpath "/Users/ashutoshsaxena/a6")
+  (subpath "/Users/ashutoshsaxena/.npm")
+  (subpath "/Users/ashutoshsaxena/.cache")
+  (subpath "/Users/ashutoshsaxena/.local/share/uv")
+  (subpath "/Users/ashutoshsaxena/Library/Caches"))
